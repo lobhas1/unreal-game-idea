@@ -1,0 +1,9 @@
+# Unreal Engine generated/derived directories
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+.vs/
+
+# OS / editor cruft
+*.pdb
