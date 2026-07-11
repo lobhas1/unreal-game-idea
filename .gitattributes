@@ -1,0 +1,10 @@
+# Replay renderer test fixtures and tooling are compared byte-for-byte.
+# The extractor (scripts/extract-rendered.py) emits LF, so the reference and
+# expected-projection fixtures must stay LF on every platform, regardless of
+# core.autocrlf. Without this, a Windows checkout rewrites them to CRLF and the
+# Phase 3 gate fails on line endings alone.
+docs/references/*.txt          text eol=lf
+docs/expected-projections/*.txt text eol=lf
+*.reference.txt                text eol=lf
+*.rendered.txt                 text eol=lf
+scripts/*.py                   text eol=lf
