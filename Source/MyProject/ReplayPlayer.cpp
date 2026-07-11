@@ -265,7 +265,7 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 
 	while (NextEventIndex < Events.Num() && Events[NextEventIndex].T <= SimTime)
 	{
-		ProcessEvent(Events[NextEventIndex]);
+		PlayReplayEvent(Events[NextEventIndex]);
 		++NextEventIndex;
 	}
 
@@ -297,7 +297,7 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 	}
 }
 
-void AReplayPlayer::ProcessEvent(const FReplayEvent& Event)
+void AReplayPlayer::PlayReplayEvent(const FReplayEvent& Event)
 {
 	// THE LOG comes first and unconditionally: every consumed event emits its
 	// canonical projection line. Visuals are secondary and never gate the log.

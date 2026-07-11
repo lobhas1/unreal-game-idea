@@ -85,7 +85,7 @@ private:
 	FVector SimToWorld(const FVector& Sim) const;
 
 	// --- playback ---
-	void ProcessEvent(const FReplayEvent& Event);
+	void PlayReplayEvent(const FReplayEvent& Event);
 	void RenderEventVisual(const FReplayEvent& Event);
 	void EmitCanonical(const FReplayEvent& Event) const;
 	FReplayEntity* FindEntity(int32 Id);
