@@ -52,6 +52,7 @@ void AReplayPlayer::BeginPlay()
 	ModifyStatFX = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_ModifyStat.NS_ModifyStat"));
 	DisplaceFX   = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Displace.NS_Displace"));
 	ZoneFX       = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Zone.NS_Zone"));
+	ProjectileFX = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Projectile.NS_Projectile"));
 
 	// Shield shell mesh + material (element-tinted via a dynamic instance per grant).
 	SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -192,7 +193,59 @@ bool AReplayPlayer::LoadReplay()
 		Events.Add(MoveTemp(Ev));
 	}
 
+	ClassifyDeliveries();
 	return Events.Num() > 0;
+}
+
+void AReplayPlayer::ClassifyDeliveries()
+{
+	// For each CastStarted, scan the events up to the next CastStarted (its "cast
+	// group") and classify delivery from the data (Law 2): a ZoneSpawned => GroundAoE;
+	// else the first effect on another entity => Projectile, on the caster => Self.
+	// This reads the event stream only; it invents nothing and drives no state.
+	auto NumField = [](const TSharedPtr<FJsonObject>& O, const TCHAR* K, int32 Def) -> int32
+	{
+		int32 V = Def; if (O.IsValid()) { O->TryGetNumberField(K, V); } return V;
+	};
+
+	for (int32 i = 0; i < Events.Num(); ++i)
+	{
+		if (Events[i].Type != TEXT("CastStarted")) { continue; }
+		const int32 Caster = NumField(Events[i].Payload, TEXT("caster"), 0);
+		Events[i].CasterId = Caster;
+
+		for (int32 j = i + 1; j < Events.Num() && Events[j].Type != TEXT("CastStarted"); ++j)
+		{
+			const FString& T = Events[j].Type;
+			const TSharedPtr<FJsonObject>& JP = Events[j].Payload;
+			if (T == TEXT("ZoneSpawned"))
+			{
+				Events[i].Delivery = EReplayDelivery::GroundAoE;
+				Events[i].EffectT = Events[j].T;
+				if (JP.IsValid()) { JP->TryGetNumberField(TEXT("size"), Events[i].ZoneRadiusSim); }
+				const TSharedPtr<FJsonObject>* C = nullptr;
+				if (JP.IsValid() && JP->TryGetObjectField(TEXT("center"), C) && C)
+				{
+					Events[i].ZoneCenterSim = FVector((*C)->GetNumberField(TEXT("x")),
+					                                   (*C)->GetNumberField(TEXT("y")),
+					                                   (*C)->GetNumberField(TEXT("z")));
+				}
+				break;
+			}
+			if (T == TEXT("DamageDealt") || T == TEXT("StatusApplied") || T == TEXT("Healed") ||
+			    T == TEXT("ShieldGranted") || T == TEXT("StatModified") || T == TEXT("Displaced"))
+			{
+				const int32 Tgt = (T == TEXT("Displaced"))
+					? NumField(JP, TEXT("subject"), -1)
+					: NumField(JP, TEXT("target"), -1);
+				Events[i].EffectTargetId = Tgt;
+				Events[i].EffectT = Events[j].T;
+				if (JP.IsValid()) { JP->TryGetStringField(TEXT("element"), Events[i].EffectElement); }
+				Events[i].Delivery = (Tgt == Caster) ? EReplayDelivery::Self : EReplayDelivery::Projectile;
+				break;
+			}
+		}
+	}
 }
 
 FVector AReplayPlayer::SimToWorld(const FVector& Sim) const
@@ -307,6 +360,25 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 			const float R = Z.RadiusSim * WorldScale;
 			DrawDebugCylinder(World, C, C + FVector(0, 0, 15.f), R, 32,
 				FColor(30, 120, 255, 64), false, -1.f, 0, 2.f);
+		}
+	}
+
+	// Advance travelling projectiles along their cast->effect path on the shared clock
+	// (speed- and hit-stop-consistent, since it reads SimTime and never advances it).
+	for (int32 i = Projectiles.Num() - 1; i >= 0; --i)
+	{
+		FActiveProjectile& PR = Projectiles[i];
+		if (!PR.Comp.IsValid()) { Projectiles.RemoveAt(i); continue; }
+		const double Span = PR.EndSim - PR.StartSim;
+		const double A = (Span > SMALL_NUMBER) ? (SimTime - PR.StartSim) / Span : 1.0;
+		if (A >= 1.0)
+		{
+			PR.Comp->DestroyComponent();
+			Projectiles.RemoveAt(i);
+		}
+		else
+		{
+			PR.Comp->SetWorldLocation(FMath::Lerp(PR.FromW, PR.ToW, (float)FMath::Clamp(A, 0.0, 1.0)));
 		}
 	}
 
@@ -505,6 +577,37 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		int32 Caster = 0; P->TryGetNumberField(TEXT("caster"), Caster);
 		FString Spell; P->TryGetStringField(TEXT("spell"), Spell);
 		Float(HeadOf(Caster) + FVector(0, 0, 40.f), Spell, FColor::White);
+
+		// Delivery trajectory (Step D), resolved from the event stream by
+		// ClassifyDeliveries. Element tint comes from the resolving effect's element.
+		if (Event.Delivery == EReplayDelivery::Projectile)
+		{
+			FReplayEntity* CE = FindEntity(Event.CasterId);
+			FReplayEntity* TE = FindEntity(Event.EffectTargetId);
+			if (CE && TE)
+			{
+				const FVector FromW = SimToWorld(CE->CurrentSim) + FVector(0, 0, 120.f);
+				const FVector ToW   = SimToWorld(TE->CurrentSim) + FVector(0, 0, 120.f);
+				const FElementPalette Pal = ReplayGrammar::Resolve(FString(), Event.EffectElement, FString());
+				if (Event.EffectT - Event.T < kHitscanGap)
+				{
+					// gap ~ 0 -> hitscan: an instant element-tinted streak.
+					DrawDebugLine(World, FromW, ToW, Pal.Primary.ToFColor(true), false, 0.15f, 0, 5.f);
+				}
+				else if (ProjectileFX)
+				{
+					// travelling projectile: head+trail lerped over [castT, effectT] in Tick.
+					if (UNiagaraComponent* Comp =
+						UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, ProjectileFX, FromW))
+					{
+						Comp->SetVariableLinearColor(TEXT("User.Color"), Pal.Primary);
+						FActiveProjectile PR; PR.Comp = Comp; PR.FromW = FromW; PR.ToW = ToW;
+						PR.StartSim = Event.T; PR.EndSim = Event.EffectT;
+						Projectiles.Add(PR);
+					}
+				}
+			}
+		}
 	}
 	else if (Event.Type == TEXT("CastFailed"))
 	{

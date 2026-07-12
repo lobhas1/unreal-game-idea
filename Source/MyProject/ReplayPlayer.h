@@ -20,6 +20,12 @@ class UStaticMesh;
 class AStaticMeshActor;
 class ACameraActor;
 class UNiagaraSystem;
+class UNiagaraComponent;
+
+/** Delivery trajectory of a cast, discovered from the event stream (Law 2), not
+ *  from the manifest: an effect on another entity => Projectile; on the caster =>
+ *  Self; a ZoneSpawned in the cast group => GroundAoE. */
+enum class EReplayDelivery : uint8 { None, Projectile, Self, GroundAoE };
 
 /** One recorded event. Non-reflected: holds the raw payload for rendering and,
  *  crucially, the canonical projection string that the replay file already
@@ -31,6 +37,16 @@ struct FReplayEvent
 	FString Type;
 	FString Canonical;
 	TSharedPtr<FJsonObject> Payload;
+
+	// Delivery resolution (populated by ClassifyDeliveries for CastStarted events only,
+	// from the following events up to the next cast - purely descriptive, no combat logic).
+	EReplayDelivery Delivery = EReplayDelivery::None;
+	int32 CasterId = 0;
+	int32 EffectTargetId = 0;
+	double EffectT = 0.0;          // time of the resolving effect event (== T for hitscan)
+	FString EffectElement;         // element carried by the resolving effect, if any
+	FVector ZoneCenterSim = FVector::ZeroVector; // GroundAoE telegraph center (sim space)
+	double ZoneRadiusSim = 0.0;
 };
 
 /** One combatant, resolved from the replay header. */
@@ -64,6 +80,17 @@ struct FActiveShell
 	double ExpireSim = 0.0;
 };
 
+/** A travelling projectile: the renderer lerps the component from FromW to ToW over
+ *  [StartSim, EndSim] on the shared clock (cast-event -> effect-event, Law 2). */
+struct FActiveProjectile
+{
+	TWeakObjectPtr<UNiagaraComponent> Comp;
+	FVector FromW = FVector::ZeroVector;
+	FVector ToW = FVector::ZeroVector;
+	double StartSim = 0.0;
+	double EndSim = 0.0;
+};
+
 UCLASS()
 class MYPROJECT_API AReplayPlayer : public AActor
 {
@@ -91,6 +118,7 @@ public:
 private:
 	// --- loading ---
 	bool LoadReplay();
+	void ClassifyDeliveries();   // resolve each CastStarted's delivery from the event stream
 	void BuildScaffold();
 	FVector SimToWorld(const FVector& Sim) const;
 
@@ -134,6 +162,12 @@ private:
 	UStaticMesh* SphereMesh = nullptr;
 	UMaterialInterface* ShieldMat = nullptr;
 	TArray<FActiveShell> Shells;
+
+	// Delivery (Step D): projectile with swappable head+trail; travelling projectiles
+	// are lerped each Tick, hitscan casts draw an instant streak.
+	UNiagaraSystem* ProjectileFX = nullptr;
+	TArray<FActiveProjectile> Projectiles;
+	static constexpr double kHitscanGap = 0.05; // gap below this => hitscan streak, not travel
 
 	// Spawn a verb archetype at Loc. When ClauseElement is non-empty the burst is
 	// element-tinted via the two-level law (User.Color); otherwise the system's
