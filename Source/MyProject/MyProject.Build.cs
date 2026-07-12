@@ -17,7 +17,8 @@ public class MyProject : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"Json",
-			"JsonUtilities"
+			"JsonUtilities",
+			"Niagara"
 		});
 	}
 }

@@ -2,6 +2,10 @@
 
 #include "ReplayPlayer.h"
 
+#include "ReplayVisualGrammar.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
@@ -37,6 +41,9 @@ void AReplayPlayer::BeginPlay()
 
 	CubeMesh     = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	CylinderMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+
+	// M2 verb archetype: damage burst (element-tinted via User.Color / share via scale).
+	DamageFX = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Damage.NS_Damage"));
 
 	bLoaded = LoadReplay();
 	if (!bLoaded)
@@ -345,6 +352,30 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		double Amt = 0; P->TryGetNumberField(TEXT("amount"), Amt);
 		bool bKilled = false; P->TryGetBoolField(TEXT("killed"), bKilled);
 		Float(HeadOf(Target), FString::Printf(TEXT("-%d"), FMath::RoundToInt(Amt)), FColor::Red);
+
+		// M2 verb archetype: element-tinted impact burst at the target, scaled by
+		// damage share of the victim's max HP. Purely cosmetic - fired after the
+		// canonical log, driving no event state.
+		if (DamageFX)
+		{
+			if (FReplayEntity* E = FindEntity(Target))
+			{
+				FString Elem; P->TryGetStringField(TEXT("element"), Elem);
+				// Two-level element law: no concept element on M1 fixtures, so the
+				// clause (event) element tints; absent -> arcane-neutral (Law 3).
+				const FElementPalette Pal = ReplayGrammar::Resolve(FString(), Elem, FString());
+				const double Frac = (E->MaxHp > 0.0) ? (Amt / E->MaxHp) : 0.0;
+				const float Scale = FMath::Clamp(0.6f + 0.8f * (float)Frac, 0.4f, 3.0f);
+				const FVector Loc = SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f);
+				if (UNiagaraComponent* Burst =
+					UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, DamageFX, Loc))
+				{
+					Burst->SetVariableLinearColor(TEXT("User.Color"), Pal.Primary);
+					Burst->SetVariableFloat(TEXT("User.Scale"), Scale);
+					Burst->SetWorldScale3D(FVector(Scale));
+				}
+			}
+		}
 		if (bKilled)
 		{
 			if (FReplayEntity* E = FindEntity(Target))

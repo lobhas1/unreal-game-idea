@@ -19,6 +19,7 @@
 class UStaticMesh;
 class AStaticMeshActor;
 class ACameraActor;
+class UNiagaraSystem;
 
 /** One recorded event. Non-reflected: holds the raw payload for rendering and,
  *  crucially, the canonical projection string that the replay file already
@@ -106,6 +107,12 @@ private:
 	TWeakObjectPtr<ACameraActor> OverheadCamera;
 	UStaticMesh* CubeMesh = nullptr;
 	UStaticMesh* CylinderMesh = nullptr;
+
+	// --- M2 verb archetype effects (grammar-driven, no per-spell authoring) ---
+	// Loaded by soft path in BeginPlay. The renderer resolves element colors via
+	// ReplayVisualGrammar and spawns the archetype; it never alters the event loop
+	// or the canonical log, so G1 byte-identity holds with visuals live.
+	UNiagaraSystem* DamageFX = nullptr;
 
 	// derived world extents (sim space) for floor sizing
 	FVector SimMin = FVector::ZeroVector;
