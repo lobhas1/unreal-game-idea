@@ -103,3 +103,42 @@ G1 regression unchanged (juice on, per Law 6 / G1b). G2: every corpus token abov
 an implemented asset; one screenshot per verb & delivery family; zero
 fallback-placeholder renders across all 26 showcases. G3 per the registered protocol,
 fresh tester.
+
+
+
+## Direction addendum v2 — the beauty pass (banked 2026-07-12; NON-BINDING for M2 gates)
+Ratified direction for a future visual round, not a requirement of the current build.
+1. DIEGETIC SUBSTANCE. Effects are made of their element's physical substance doing
+   physically readable things, not abstract glows. Projectiles especially: the flying
+   body itself is elemental — a fire throw is a ball of fire, a water throw a coherent
+   glob of water, an earth throw a hurled rock — the trail is a consequence of the
+   substance, not a costume on a glowing dot. Shields likewise: a water shield is
+   flowing water shaped into a shell around the target.
+2. NO PERFECT PRIMITIVES. Real substances are irregular. Effect bodies avoid perfectly
+   symmetric spheres and discs: noise in the silhouette, rotation, flicker, and
+   surface motion. (All examples illustrative, not literal.)
+
+
+3. CONCEPT MOTIFS (the third leg). A future round restores a visual field to the
+   naming oracle, constrained to a CLOSED vocabulary of authored motif primitives
+   (e.g. winged, tear, spiral, serpent, bloom, shatter — illustrative). The oracle
+   composes a concept's look from that vocabulary exactly as it composes mechanics
+   from verbs; each motif is authored once and inherited by every matching concept
+   forever. Motifs DECORATE, verb signatures INFORM: a motif may never impersonate
+   another verb's signature (Law 4 outranks). Vocabulary widens by data-vote, like
+   verbs. This round carries its own prompt change, new sha, and a pre-registered
+   blind concept-to-visual matching test.
+
+
+4. Structure unchanged: richness lives in the element-motif × verb/delivery matrix,
+   authored once per cell, inherited by every spell forever (Law 1). Laws 4 and 5 —
+   legibility and restraint — outrank spectacle: irregularity must never cost
+   readability. Law 2 truth is untouchable.
+Scope: opens as its own milestone after M2's gates close.
+
+5. THE TWIN TEST (banked gate for the beauty round): distinct concepts must be
+   perceptually distinct. Protocol sketch: show a stranger paired playbacks of
+   different-concept spells and ask same-or-different; threshold pre-registered
+   when the round opens. Visual sameness between spells with near-identical
+   mechanics is treated as a CANON question (convergence candidate), never
+   masked by cosmetic differentiation.
