@@ -13,6 +13,7 @@
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Engine/DirectionalLight.h"
+#include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
@@ -51,6 +52,10 @@ void AReplayPlayer::BeginPlay()
 	ModifyStatFX = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_ModifyStat.NS_ModifyStat"));
 	DisplaceFX   = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Displace.NS_Displace"));
 	ZoneFX       = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Zone.NS_Zone"));
+
+	// Shield shell mesh + material (element-tinted via a dynamic instance per grant).
+	SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	ShieldMat  = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/M2/Materials/M_ShieldShell.M_ShieldShell"));
 
 	bLoaded = LoadReplay();
 	if (!bLoaded)
@@ -305,6 +310,21 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 		}
 	}
 
+	// Despawn shield shells whose event-carried duration has elapsed on the shared
+	// clock (respects speed and, later, hit-stop). A gentle pop marks the expiry.
+	for (int32 i = Shells.Num() - 1; i >= 0; --i)
+	{
+		if (SimTime >= Shells[i].ExpireSim)
+		{
+			if (Shells[i].Mesh.IsValid())
+			{
+				SpawnVerbFX(ShieldFX, Shells[i].Mesh->GetActorLocation(), FString(), 1.0f);
+				Shells[i].Mesh->Destroy();
+			}
+			Shells.RemoveAt(i);
+		}
+	}
+
 	if (NextEventIndex >= Events.Num() && !bFinished)
 	{
 		FinishFight();
@@ -437,11 +457,36 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		int32 Target = 0; P->TryGetNumberField(TEXT("target"), Target);
 		double Amt = 0; P->TryGetNumberField(TEXT("amount"), Amt);
 		Float(HeadOf(Target), FString::Printf(TEXT("shield %d"), FMath::RoundToInt(Amt)), FColor(120, 180, 255));
-		// shield archetype: translucent shell around the body (default neutral tint;
-		// elemental-vs-omni distinction is refined with concept element in G2).
+		// shield archetype: a PERSISTENT translucent shell around the body, not a burst.
+		// No shield-end event exists in the corpus, so the shell lives for the grant
+		// event's own `duration` (Law 2 timings), tracked on SimTime and popped on expiry.
+		double Dur = 0; P->TryGetNumberField(TEXT("duration"), Dur);
 		if (FReplayEntity* E = FindEntity(Target))
 		{
-			SpawnVerbFX(ShieldFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), FString(), 1.2f);
+			if (SphereMesh && ShieldMat && World)
+			{
+				const FVector Loc = SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f);
+				if (AStaticMeshActor* Shell = World->SpawnActor<AStaticMeshActor>(Loc, FRotator::ZeroRotator))
+				{
+					Shell->SetMobility(EComponentMobility::Movable);
+					UStaticMeshComponent* SMC = Shell->GetStaticMeshComponent();
+					SMC->SetStaticMesh(SphereMesh);
+					SMC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					Shell->SetActorScale3D(FVector(1.8f));
+					if (UMaterialInstanceDynamic* MID = SMC->CreateDynamicMaterialInstance(0, ShieldMat))
+					{
+						// Omni shields are neutral white; elemental tint arrives with the
+						// concept element in G2. ShieldGranted carries no element (Law 3 inherit).
+						MID->SetVectorParameterValue(TEXT("TintColor"), FLinearColor(0.6f, 0.8f, 1.0f));
+					}
+					if (E->Capsule.IsValid())
+					{
+						Shell->AttachToActor(E->Capsule.Get(), FAttachmentTransformRules::KeepWorldTransform);
+					}
+					FActiveShell AS; AS.Mesh = Shell; AS.ExpireSim = Event.T + Dur;
+					Shells.Add(AS);
+				}
+			}
 		}
 	}
 	else if (Event.Type == TEXT("StatModified"))
@@ -482,11 +527,29 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 				                       (*To)->GetNumberField(TEXT("z")));
 			}
 		}
-		// displace archetype: dust burst at the origin (Push/Dash trail refined later;
-		// Teleport's no-trail blink handled by mode in Step D).
+		// displace archetype, mode-aware (grammar v1.1):
+		//  Push/Dash -> ribbon trail parented to the moving body (trails as it interpolates);
+		//  Teleport  -> no trail: an implosion flash at the origin, an appearance flash at the destination.
+		FString Mode; P->TryGetStringField(TEXT("mode"), Mode);
 		if (FReplayEntity* E = FindEntity(Subject))
 		{
-			SpawnVerbFX(DisplaceFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 50.f), FString(), 1.0f);
+			const FVector FromW = SimToWorld(E->CurrentSim) + FVector(0, 0, 50.f);
+			const FVector ToW   = SimToWorld(E->TargetSim) + FVector(0, 0, 50.f);
+			if (Mode == TEXT("Teleport"))
+			{
+				SpawnVerbFX(DisplaceFX, FromW, FString(), 0.8f); // implosion at origin
+				SpawnVerbFX(DisplaceFX, ToW,   FString(), 1.0f); // appearance at destination
+			}
+			else if (DisplaceFX && World && E->Capsule.IsValid())
+			{
+				UNiagaraFunctionLibrary::SpawnSystemAttached(DisplaceFX, E->Capsule->GetRootComponent(),
+					NAME_None, FVector(0, 0, 50.f), FRotator::ZeroRotator,
+					EAttachLocation::KeepRelativeOffset, true);
+			}
+			else
+			{
+				SpawnVerbFX(DisplaceFX, FromW, FString(), 1.0f);
+			}
 		}
 	}
 	else if (Event.Type == TEXT("ZoneSpawned"))

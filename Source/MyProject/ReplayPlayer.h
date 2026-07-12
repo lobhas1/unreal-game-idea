@@ -55,6 +55,15 @@ struct FActiveZone
 	bool bActive = false;
 };
 
+/** A persistent shield shell. No shield-end event exists in the corpus, so the
+ *  shell's lifetime derives from the grant event's own `duration` timing (Law 2
+ *  timings clause), tracked on the shared SimTime clock - never a band. */
+struct FActiveShell
+{
+	TWeakObjectPtr<AStaticMeshActor> Mesh;
+	double ExpireSim = 0.0;
+};
+
 UCLASS()
 class MYPROJECT_API AReplayPlayer : public AActor
 {
@@ -119,6 +128,12 @@ private:
 	UNiagaraSystem* ModifyStatFX = nullptr;
 	UNiagaraSystem* DisplaceFX = nullptr;
 	UNiagaraSystem* ZoneFX = nullptr;
+
+	// Shield shell (persistent translucent sphere, element-tinted MID). Tracked and
+	// despawned on the shared clock per the grant event's duration.
+	UStaticMesh* SphereMesh = nullptr;
+	UMaterialInterface* ShieldMat = nullptr;
+	TArray<FActiveShell> Shells;
 
 	// Spawn a verb archetype at Loc. When ClauseElement is non-empty the burst is
 	// element-tinted via the two-level law (User.Color); otherwise the system's
