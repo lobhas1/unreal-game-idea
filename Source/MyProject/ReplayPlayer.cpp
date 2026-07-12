@@ -42,8 +42,15 @@ void AReplayPlayer::BeginPlay()
 	CubeMesh     = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	CylinderMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 
-	// M2 verb archetype: damage burst (element-tinted via User.Color / share via scale).
-	DamageFX = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Damage.NS_Damage"));
+	// M2 verb archetypes (element-tinted via User.Color / scale from share). Loaded by
+	// soft path; grammar maps event type -> archetype, no per-spell authoring.
+	DamageFX     = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Damage.NS_Damage"));
+	HealFX       = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Heal.NS_Heal"));
+	ShieldFX     = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Shield.NS_Shield"));
+	StatusFX     = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Status.NS_Status"));
+	ModifyStatFX = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_ModifyStat.NS_ModifyStat"));
+	DisplaceFX   = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Displace.NS_Displace"));
+	ZoneFX       = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Zone.NS_Zone"));
 
 	bLoaded = LoadReplay();
 	if (!bLoaded)
@@ -327,6 +334,27 @@ FReplayEntity* AReplayPlayer::FindEntity(int32 Id)
 	return nullptr;
 }
 
+void AReplayPlayer::SpawnVerbFX(UNiagaraSystem* System, const FVector& Loc,
+                                const FString& ClauseElement, float Scale)
+{
+	UWorld* World = GetWorld();
+	if (!System || !World) { return; }
+	if (UNiagaraComponent* Comp =
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, System, Loc))
+	{
+		if (!ClauseElement.IsEmpty())
+		{
+			// Two-level element law: the clause (event) element tints. Concept and
+			// highest-share are not carried by M1 fixture events, so pass empty and
+			// let Law 3's fallbacks apply.
+			const FElementPalette Pal = ReplayGrammar::Resolve(FString(), ClauseElement, FString());
+			Comp->SetVariableLinearColor(TEXT("User.Color"), Pal.Primary);
+		}
+		Comp->SetVariableFloat(TEXT("User.Scale"), Scale);
+		Comp->SetWorldScale3D(FVector(Scale));
+	}
+}
+
 void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 {
 	UWorld* World = GetWorld();
@@ -353,28 +381,14 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		bool bKilled = false; P->TryGetBoolField(TEXT("killed"), bKilled);
 		Float(HeadOf(Target), FString::Printf(TEXT("-%d"), FMath::RoundToInt(Amt)), FColor::Red);
 
-		// M2 verb archetype: element-tinted impact burst at the target, scaled by
-		// damage share of the victim's max HP. Purely cosmetic - fired after the
-		// canonical log, driving no event state.
-		if (DamageFX)
+		// M2 damage archetype: element-tinted impact burst at the target, scaled by
+		// damage share of the victim's max HP.
+		if (FReplayEntity* E = FindEntity(Target))
 		{
-			if (FReplayEntity* E = FindEntity(Target))
-			{
-				FString Elem; P->TryGetStringField(TEXT("element"), Elem);
-				// Two-level element law: no concept element on M1 fixtures, so the
-				// clause (event) element tints; absent -> arcane-neutral (Law 3).
-				const FElementPalette Pal = ReplayGrammar::Resolve(FString(), Elem, FString());
-				const double Frac = (E->MaxHp > 0.0) ? (Amt / E->MaxHp) : 0.0;
-				const float Scale = FMath::Clamp(0.6f + 0.8f * (float)Frac, 0.4f, 3.0f);
-				const FVector Loc = SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f);
-				if (UNiagaraComponent* Burst =
-					UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, DamageFX, Loc))
-				{
-					Burst->SetVariableLinearColor(TEXT("User.Color"), Pal.Primary);
-					Burst->SetVariableFloat(TEXT("User.Scale"), Scale);
-					Burst->SetWorldScale3D(FVector(Scale));
-				}
-			}
+			FString Elem; P->TryGetStringField(TEXT("element"), Elem);
+			const double Frac = (E->MaxHp > 0.0) ? (Amt / E->MaxHp) : 0.0;
+			const float S = FMath::Clamp(0.6f + 0.8f * (float)Frac, 0.4f, 3.0f);
+			SpawnVerbFX(DamageFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), Elem, S);
 		}
 		if (bKilled)
 		{
@@ -399,24 +413,47 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		int32 Target = 0; P->TryGetNumberField(TEXT("target"), Target);
 		double Eff = 0; P->TryGetNumberField(TEXT("effective"), Eff);
 		Float(HeadOf(Target), FString::Printf(TEXT("+%d"), FMath::RoundToInt(Eff)), FColor::Green);
+		// Heal archetype: motes rise/converge on the target (default restorative tint;
+		// no clause element carried by Healed events).
+		if (FReplayEntity* E = FindEntity(Target))
+		{
+			SpawnVerbFX(HealFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), FString(), 1.0f);
+		}
 	}
 	else if (Event.Type == TEXT("StatusApplied"))
 	{
 		int32 Target = 0; P->TryGetNumberField(TEXT("target"), Target);
 		FString Status; P->TryGetStringField(TEXT("status"), Status);
 		Float(HeadOf(Target) + FVector(0, 0, 20.f), Status, FColor::Cyan);
+		// applyStatus archetype: sigil dock burst over the head (sigil glyph itself
+		// is Step E; this is the rise/dock motion).
+		if (FReplayEntity* E = FindEntity(Target))
+		{
+			SpawnVerbFX(StatusFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 150.f), FString(), 1.0f);
+		}
 	}
 	else if (Event.Type == TEXT("ShieldGranted"))
 	{
 		int32 Target = 0; P->TryGetNumberField(TEXT("target"), Target);
 		double Amt = 0; P->TryGetNumberField(TEXT("amount"), Amt);
 		Float(HeadOf(Target), FString::Printf(TEXT("shield %d"), FMath::RoundToInt(Amt)), FColor(120, 180, 255));
+		// shield archetype: translucent shell around the body (default neutral tint;
+		// elemental-vs-omni distinction is refined with concept element in G2).
+		if (FReplayEntity* E = FindEntity(Target))
+		{
+			SpawnVerbFX(ShieldFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), FString(), 1.2f);
+		}
 	}
 	else if (Event.Type == TEXT("StatModified"))
 	{
 		int32 Target = 0; P->TryGetNumberField(TEXT("target"), Target);
 		FString Kind; P->TryGetStringField(TEXT("statKind"), Kind);
 		Float(HeadOf(Target) + FVector(0, 0, 20.f), Kind, FColor::Yellow);
+		// modifyStat archetype: arrow stream + ring (direction glyph refined in Step E).
+		if (FReplayEntity* E = FindEntity(Target))
+		{
+			SpawnVerbFX(ModifyStatFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), FString(), 1.0f);
+		}
 	}
 	else if (Event.Type == TEXT("CastStarted"))
 	{
@@ -445,6 +482,12 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 				                       (*To)->GetNumberField(TEXT("z")));
 			}
 		}
+		// displace archetype: dust burst at the origin (Push/Dash trail refined later;
+		// Teleport's no-trail blink handled by mode in Step D).
+		if (FReplayEntity* E = FindEntity(Subject))
+		{
+			SpawnVerbFX(DisplaceFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 50.f), FString(), 1.0f);
+		}
 	}
 	else if (Event.Type == TEXT("ZoneSpawned"))
 	{
@@ -460,6 +503,10 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		}
 		Z.bActive = true;
 		Zones.Add(Z);
+		// spawnZone archetype: burst at the zone center (the persistent decal fill and
+		// per-tick edge pulse are Step D; this marks the spawn).
+		SpawnVerbFX(ZoneFX, SimToWorld(Z.CenterSim) + FVector(0, 0, 20.f), FString(),
+			FMath::Clamp((float)Z.RadiusSim, 1.0f, 4.0f));
 	}
 	else if (Event.Type == TEXT("ZoneExpired"))
 	{

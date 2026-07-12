@@ -113,6 +113,18 @@ private:
 	// ReplayVisualGrammar and spawns the archetype; it never alters the event loop
 	// or the canonical log, so G1 byte-identity holds with visuals live.
 	UNiagaraSystem* DamageFX = nullptr;
+	UNiagaraSystem* HealFX = nullptr;
+	UNiagaraSystem* ShieldFX = nullptr;
+	UNiagaraSystem* StatusFX = nullptr;
+	UNiagaraSystem* ModifyStatFX = nullptr;
+	UNiagaraSystem* DisplaceFX = nullptr;
+	UNiagaraSystem* ZoneFX = nullptr;
+
+	// Spawn a verb archetype at Loc. When ClauseElement is non-empty the burst is
+	// element-tinted via the two-level law (User.Color); otherwise the system's
+	// default tint stands. Cosmetic only - never touches event state or the log.
+	void SpawnVerbFX(UNiagaraSystem* System, const FVector& Loc,
+	                 const FString& ClauseElement, float Scale);
 
 	// derived world extents (sim space) for floor sizing
 	FVector SimMin = FVector::ZeroVector;
