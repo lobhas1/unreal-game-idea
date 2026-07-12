@@ -1,6 +1,6 @@
 # M2 Phase 3 — Implementation Plan (visual grammar realization)
 
-**Authority:** `docs/visual-grammar.md` (LAW, ratified 2026-07-12). Where this plan and
+**Authority:** `docs/visual-grammar.md` (LAW, v1.1, ratified 2026-07-12). Where this plan and
 the law differ, the law wins. This document maps **every token present in the corpus**
 (26 showcases + 3 M1 fights) to a concrete Unreal asset or renderer parameter, and
 records the deviations the corpus forces.
@@ -149,11 +149,10 @@ root, stun, blind, stealth, haste, silence, fear, poison, bleed, shock, weaken, 
 unstoppable, disarm. All 18 get a sigil this milestone (simple geometric/text-glyph acceptable;
 legibility over beauty).
 
-**Deviation D4 (must-fix for G2):** the corpus contains two statuses **not** in the grammar
-table — `Vulnerable` (25) and `Regen` (1). G2 forbids placeholder/missing-asset renders across
-all showcases, so both need real sigils. Proposed, consistent with the table's idiom:
-`Vulnerable` = downward-cracked-shield glyph, victim-red tint; `Regen` = green plus/heart
-glyph with slow rising motes (heal-adjacent). Flagged for ratification; built unless overruled.
+**Deviation D4 — RATIFIED in grammar v1.1 (2026-07-12):** the corpus contains two statuses that
+were absent from the v1 table — `Vulnerable` (25) and `Regen` (1). Now written into the law's
+status table: `Vulnerable` = downward-cracked-shield glyph, red tint (defense broken);
+`Regen` = green plus sigil, small green motes rise on each tick. Built as ratified.
 
 Sigil implementation: one shared `NS_StatusDock` + a `Sigil` texture/glyph parameter per
 status (materials `MI_Sigil_<name>` from a master `M_Sigil`), docked above the head; aura tint
