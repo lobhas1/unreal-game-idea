@@ -93,6 +93,15 @@ struct FActiveProjectile
 	double EndSim = 0.0;
 };
 
+/** An active status sigil docked over an entity: persists from StatusApplied until
+ *  StatusRemoved (which shatters it). Rendered as a tinted text glyph (Step E). */
+struct FActiveStatus
+{
+	int32 EntityId = 0;
+	FString Status;
+	double NextMoteSim = 0.0; // regen: next SimTime to emit a rising mote
+};
+
 /** A groundAoE ground decal: spawned faint as a telegraph at the cast, filled to
  *  full opacity at the ZoneSpawned event, removed at ZoneExpired (Law 2 - the
  *  events drive it). ZoneId is -1 until the spawn event adopts the telegraph. */
@@ -188,6 +197,11 @@ private:
 	UMaterialInterface* ZoneDecalMat = nullptr;
 	TArray<FActiveDecal> Decals;
 	void SpawnZoneDecal(const FVector& CenterSim, double RadiusSim, float Opacity, int32 ZoneId);
+
+	// Status sigils (Step E): persistent docked text glyphs, one per active status,
+	// added on StatusApplied and shattered on StatusRemoved.
+	TArray<FActiveStatus> ActiveStatuses;
+	static constexpr double kRegenMoteInterval = 0.6; // sim-seconds between regen motes
 
 	// Spawn a verb archetype at Loc. When ClauseElement is non-empty the burst is
 	// element-tinted via the two-level law (User.Color); otherwise the system's

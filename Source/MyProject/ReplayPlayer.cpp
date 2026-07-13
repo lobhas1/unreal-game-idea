@@ -3,6 +3,7 @@
 #include "ReplayPlayer.h"
 
 #include "ReplayVisualGrammar.h"
+#include "ReplayStatusGlyphs.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
@@ -400,6 +401,30 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 		}
 	}
 
+	// Status sigils: redraw each active status as a tinted text glyph docked over its
+	// entity (per-tick redraw = persistent while active), stacked when several stack.
+	// Regen emits green motes on a cosmetic cadence (no per-tick regen event exists).
+	if (World)
+	{
+		TMap<int32, int32> StackByEntity;
+		for (FActiveStatus& AS : ActiveStatuses)
+		{
+			FReplayEntity* E = FindEntity(AS.EntityId);
+			if (!E) { continue; }
+			int32& StackN = StackByEntity.FindOrAdd(AS.EntityId);
+			const FStatusGlyph G = ReplayStatus::GlyphFor(AS.Status);
+			const FVector Loc = SimToWorld(E->CurrentSim) +
+				FVector(0, 0, 100.f + kHeadOffsetZ + 30.f + StackN * 22.f);
+			DrawDebugString(World, Loc, G.Text, nullptr, G.Tint.ToFColor(true), 0.f, true);
+			++StackN;
+			if (G.bRisingMotes && SimTime >= AS.NextMoteSim)
+			{
+				SpawnVerbFX(HealFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 60.f), FString(), 0.5f);
+				AS.NextMoteSim = SimTime + kRegenMoteInterval;
+			}
+		}
+	}
+
 	if (NextEventIndex >= Events.Num() && !bFinished)
 	{
 		FinishFight();
@@ -537,9 +562,18 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 	{
 		int32 Target = 0; P->TryGetNumberField(TEXT("target"), Target);
 		FString Status; P->TryGetStringField(TEXT("status"), Status);
-		Float(HeadOf(Target) + FVector(0, 0, 20.f), Status, FColor::Cyan);
-		// applyStatus archetype: sigil dock burst over the head (sigil glyph itself
-		// is Step E; this is the rise/dock motion).
+		// applyStatus archetype: sigil rises and docks over the head (persistent while
+		// active; see Tick), plus a dock burst. Track it unless already docked.
+		bool bAlready = false;
+		for (const FActiveStatus& AS : ActiveStatuses)
+		{
+			if (AS.EntityId == Target && AS.Status == Status) { bAlready = true; break; }
+		}
+		if (!bAlready)
+		{
+			FActiveStatus AS; AS.EntityId = Target; AS.Status = Status; AS.NextMoteSim = SimTime;
+			ActiveStatuses.Add(AS);
+		}
 		if (FReplayEntity* E = FindEntity(Target))
 		{
 			SpawnVerbFX(StatusFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 150.f), FString(), 1.0f);
@@ -750,7 +784,24 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 			}
 		}
 	}
-	// ZoneTicked, StatusRemoved: no dedicated visual (still logged canonically).
+	else if (Event.Type == TEXT("StatusRemoved"))
+	{
+		int32 Target = 0; P->TryGetNumberField(TEXT("target"), Target);
+		FString Status; P->TryGetStringField(TEXT("status"), Status);
+		// Removal shatters the sigil: undock it and pop a small burst at the head.
+		for (int32 i = ActiveStatuses.Num() - 1; i >= 0; --i)
+		{
+			if (ActiveStatuses[i].EntityId == Target && ActiveStatuses[i].Status == Status)
+			{
+				ActiveStatuses.RemoveAt(i);
+			}
+		}
+		if (FReplayEntity* E = FindEntity(Target))
+		{
+			SpawnVerbFX(StatusFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 150.f), FString(), 0.6f);
+		}
+	}
+	// ZoneTicked: no dedicated visual (still logged canonically).
 }
 
 void AReplayPlayer::FinishFight()
