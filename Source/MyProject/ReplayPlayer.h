@@ -21,6 +21,8 @@ class AStaticMeshActor;
 class ACameraActor;
 class UNiagaraSystem;
 class UNiagaraComponent;
+class UDecalComponent;
+class UMaterialInstanceDynamic;
 
 /** Delivery trajectory of a cast, discovered from the event stream (Law 2), not
  *  from the manifest: an effect on another entity => Projectile; on the caster =>
@@ -89,6 +91,17 @@ struct FActiveProjectile
 	FVector ToW = FVector::ZeroVector;
 	double StartSim = 0.0;
 	double EndSim = 0.0;
+};
+
+/** A groundAoE ground decal: spawned faint as a telegraph at the cast, filled to
+ *  full opacity at the ZoneSpawned event, removed at ZoneExpired (Law 2 - the
+ *  events drive it). ZoneId is -1 until the spawn event adopts the telegraph. */
+struct FActiveDecal
+{
+	TWeakObjectPtr<UDecalComponent> Decal;
+	TWeakObjectPtr<UMaterialInstanceDynamic> MID;
+	FVector CenterSim = FVector::ZeroVector;
+	int32 ZoneId = -1;
 };
 
 UCLASS()
@@ -166,8 +179,15 @@ private:
 	// Delivery (Step D): projectile with swappable head+trail; travelling projectiles
 	// are lerped each Tick, hitscan casts draw an instant streak.
 	UNiagaraSystem* ProjectileFX = nullptr;
+	UNiagaraSystem* SelfBurstFX = nullptr;   // self-delivery radial burst at the caster
 	TArray<FActiveProjectile> Projectiles;
 	static constexpr double kHitscanGap = 0.05; // gap below this => hitscan streak, not travel
+
+	// groundAoE telegraph decals (M_ZoneDecal). Telegraph on cast -> fill on ZoneSpawned
+	// -> remove on ZoneExpired.
+	UMaterialInterface* ZoneDecalMat = nullptr;
+	TArray<FActiveDecal> Decals;
+	void SpawnZoneDecal(const FVector& CenterSim, double RadiusSim, float Opacity, int32 ZoneId);
 
 	// Spawn a verb archetype at Loc. When ClauseElement is non-empty the burst is
 	// element-tinted via the two-level law (User.Color); otherwise the system's

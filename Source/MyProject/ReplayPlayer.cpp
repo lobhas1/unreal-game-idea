@@ -15,6 +15,7 @@
 #include "Engine/DirectionalLight.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Components/DecalComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/FileHelper.h"
@@ -53,6 +54,8 @@ void AReplayPlayer::BeginPlay()
 	DisplaceFX   = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Displace.NS_Displace"));
 	ZoneFX       = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Zone.NS_Zone"));
 	ProjectileFX = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_Projectile.NS_Projectile"));
+	SelfBurstFX  = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/M2/Niagara/NS_SelfBurst.NS_SelfBurst"));
+	ZoneDecalMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/M2/Materials/M_ZoneDecal.M_ZoneDecal"));
 
 	// Shield shell mesh + material (element-tinted via a dynamic instance per grant).
 	SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -447,6 +450,24 @@ void AReplayPlayer::SpawnVerbFX(UNiagaraSystem* System, const FVector& Loc,
 	}
 }
 
+void AReplayPlayer::SpawnZoneDecal(const FVector& CenterSim, double RadiusSim, float Opacity, int32 ZoneId)
+{
+	UWorld* World = GetWorld();
+	if (!World || !ZoneDecalMat) { return; }
+	const float R = FMath::Max((float)RadiusSim * WorldScale, 60.f);
+	// Project straight down onto the floor (pitch -90). DecalSize is a half-extent box.
+	UDecalComponent* Dec = UGameplayStatics::SpawnDecalAtLocation(
+		World, ZoneDecalMat, FVector(256.f, R, R), SimToWorld(CenterSim), FRotator(-90.f, 0.f, 0.f), 0.f);
+	if (!Dec) { return; }
+	FActiveDecal AD;
+	AD.Decal = Dec;
+	AD.MID = Dec->CreateDynamicMaterialInstance();
+	if (AD.MID.IsValid()) { AD.MID->SetScalarParameterValue(TEXT("Opacity"), Opacity); }
+	AD.CenterSim = CenterSim;
+	AD.ZoneId = ZoneId;
+	Decals.Add(AD);
+}
+
 void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 {
 	UWorld* World = GetWorld();
@@ -608,6 +629,23 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 				}
 			}
 		}
+		else if (Event.Delivery == EReplayDelivery::Self)
+		{
+			// self delivery: a radial burst at the caster (element tint if the self-effect
+			// carries one; else the default). The verb effect renders separately.
+			if (FReplayEntity* CE = FindEntity(Event.CasterId))
+			{
+				SpawnVerbFX(SelfBurstFX, SimToWorld(CE->CurrentSim) + FVector(0, 0, 100.f),
+					Event.EffectElement, 1.0f);
+			}
+		}
+		else if (Event.Delivery == EReplayDelivery::GroundAoE)
+		{
+			// groundAoE: faint telegraph decal at the future zone centre; the
+			// ZoneSpawned event fills it (Law 2 - centre/radius from the zone event).
+			SpawnZoneDecal(Event.ZoneCenterSim,
+				Event.ZoneRadiusSim > 0.0 ? Event.ZoneRadiusSim : 2.0, 0.15f, -1);
+		}
 	}
 	else if (Event.Type == TEXT("CastFailed"))
 	{
@@ -669,10 +707,31 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		}
 		Z.bActive = true;
 		Zones.Add(Z);
-		// spawnZone archetype: burst at the zone center (the persistent decal fill and
-		// per-tick edge pulse are Step D; this marks the spawn).
+		// spawnZone archetype: burst at the zone center.
 		SpawnVerbFX(ZoneFX, SimToWorld(Z.CenterSim) + FVector(0, 0, 20.f), FString(),
 			FMath::Clamp((float)Z.RadiusSim, 1.0f, 4.0f));
+
+		// Fill the groundAoE telegraph: adopt the pending decal at this centre and raise
+		// it to full opacity + zone radius. If no telegraph exists (cast not classified
+		// as GroundAoE), spawn the filled decal directly.
+		bool bFilled = false;
+		for (FActiveDecal& AD : Decals)
+		{
+			if (AD.ZoneId == -1 && FVector::DistSquared(AD.CenterSim, Z.CenterSim) < 1.0)
+			{
+				AD.ZoneId = Z.Id;
+				if (AD.MID.IsValid()) { AD.MID->SetScalarParameterValue(TEXT("Opacity"), 0.5f); }
+				if (AD.Decal.IsValid())
+				{
+					const float R = FMath::Max((float)Z.RadiusSim * WorldScale, 60.f);
+					AD.Decal->DecalSize = FVector(256.f, R, R);
+					AD.Decal->MarkRenderStateDirty();
+				}
+				bFilled = true;
+				break;
+			}
+		}
+		if (!bFilled) { SpawnZoneDecal(Z.CenterSim, Z.RadiusSim, 0.5f, Z.Id); }
 	}
 	else if (Event.Type == TEXT("ZoneExpired"))
 	{
@@ -680,6 +739,15 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		for (FActiveZone& Z : Zones)
 		{
 			if (Z.Id == Id) { Z.bActive = false; }
+		}
+		// Zone expired: remove its ground decal (grammar: expiry contracts and fades).
+		for (int32 i = Decals.Num() - 1; i >= 0; --i)
+		{
+			if (Decals[i].ZoneId == Id)
+			{
+				if (Decals[i].Decal.IsValid()) { Decals[i].Decal->DestroyComponent(); }
+				Decals.RemoveAt(i);
+			}
 		}
 	}
 	// ZoneTicked, StatusRemoved: no dedicated visual (still logged canonically).
