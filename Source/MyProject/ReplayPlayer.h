@@ -137,6 +137,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay")
 	float WorldScale = 100.0f;
 
+	/** Law 6 juice master switch. When false: no hit-stop, no shake, no crunch. G1b
+	 *  requires juice on vs off to yield byte-identical REPLAY| logs. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay")
+	bool bJuiceEnabled = true;
+
+	/** Optional crunch impact sounds, one per tier (light/heavy/max). Null => silent
+	 *  (concrete samples are a deferred asset; the tiering + trigger stand regardless). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay|Juice")
+	class USoundBase* CrunchTierLight = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay|Juice")
+	class USoundBase* CrunchTierHeavy = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay|Juice")
+	class USoundBase* CrunchTierMax = nullptr;
+
 private:
 	// --- loading ---
 	bool LoadReplay();
@@ -218,4 +232,18 @@ private:
 	int32 NextEventIndex = 0;
 	bool bLoaded = false;
 	bool bFinished = false;
+
+	// --- Law 6 juice (modulates ONLY the shared clock + camera; never events/log) ---
+	// Hit-stop pauses the SimTime advance for a wall-clock window; because the clock
+	// only pauses (never skips/reorders), every event still fires in order => the
+	// REPLAY| log is invariant to juice (G1b) and to speed (1x/4x).
+	double HitStopRemaining = 0.0;   // wall-clock seconds left frozen
+	float ShakeAmp = 0.0f;           // current screen-shake amplitude (decays)
+	FVector CameraBaseLoc = FVector::ZeroVector;
+	void TriggerJuice(double DamageFraction); // hit-stop + shake + crunch from one hit
+
+	static constexpr double kHitStop25 = 0.040; // >=25% max HP -> 40 ms
+	static constexpr double kHitStop50 = 0.090; // >=50% max HP -> 90 ms
+	static constexpr float  kShakeMaxAmp = 45.0f; // uu, readable cap
+	static constexpr float  kShakeDecay = 6.0f;   // per second
 };

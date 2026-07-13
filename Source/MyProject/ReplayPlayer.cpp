@@ -17,6 +17,7 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/DecalComponent.h"
+#include "Sound/SoundBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/FileHelper.h"
@@ -313,6 +314,7 @@ void AReplayPlayer::BuildScaffold()
 		{
 			Cam->SetActorLabel(TEXT("ReplayOverheadCamera"));
 			OverheadCamera = Cam;
+			CameraBaseLoc = Above; // rest pose the shake offsets around
 			if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 			{
 				PC->SetViewTarget(Cam);
@@ -335,23 +337,52 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 
 	UWorld* World = GetWorld();
 
-	// Advance the sim clock. SpeedMultiplier changes pacing ONLY; the event
-	// firing loop below is index-ordered, so order and log content are invariant.
-	SimTime += (double)DeltaSeconds * (double)FMath::Max(SpeedMultiplier, 0.f);
-
-	while (NextEventIndex < Events.Num() && Events[NextEventIndex].T <= SimTime)
+	// Law 6 hit-stop: while frozen, the shared clock does NOT advance - so no events fire
+	// and bodies hold - for a WALL-CLOCK window. The clock only pauses (never skips or
+	// reorders), so every event still fires in index order and the REPLAY| log is identical
+	// with juice on or off (G1b) and at any speed. SpeedMultiplier still changes pacing only.
+	const bool bFrozen = bJuiceEnabled && HitStopRemaining > 0.0;
+	if (bFrozen)
 	{
-		PlayReplayEvent(Events[NextEventIndex]);
-		++NextEventIndex;
+		HitStopRemaining -= (double)DeltaSeconds;
+	}
+	else
+	{
+		SimTime += (double)DeltaSeconds * (double)FMath::Max(SpeedMultiplier, 0.f);
+
+		while (NextEventIndex < Events.Num() && Events[NextEventIndex].T <= SimTime)
+		{
+			PlayReplayEvent(Events[NextEventIndex]);
+			++NextEventIndex;
+		}
+
+		// Interpolate capsule positions toward displace targets (held during hit-stop).
+		for (FReplayEntity& E : Entities)
+		{
+			if (!E.Capsule.IsValid()) { continue; }
+			E.CurrentSim = FMath::VInterpTo(E.CurrentSim, E.TargetSim, DeltaSeconds, 8.f);
+			FVector Loc = SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f);
+			E.Capsule->SetActorLocation(Loc);
+		}
 	}
 
-	// Interpolate capsule positions toward displace targets.
-	for (FReplayEntity& E : Entities)
+	// Screen shake: applied every frame (including during hit-stop so the impact reads),
+	// amplitude decaying to rest. Only damage sets ShakeAmp (via TriggerJuice).
+	if (OverheadCamera.IsValid())
 	{
-		if (!E.Capsule.IsValid()) { continue; }
-		E.CurrentSim = FMath::VInterpTo(E.CurrentSim, E.TargetSim, DeltaSeconds, 8.f);
-		FVector Loc = SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f);
-		E.Capsule->SetActorLocation(Loc);
+		if (ShakeAmp > 0.05f)
+		{
+			const FVector Off(FMath::FRandRange(-ShakeAmp, ShakeAmp),
+			                  FMath::FRandRange(-ShakeAmp, ShakeAmp),
+			                  FMath::FRandRange(-ShakeAmp, ShakeAmp));
+			OverheadCamera->SetActorLocation(CameraBaseLoc + Off);
+			ShakeAmp = FMath::FInterpTo(ShakeAmp, 0.f, DeltaSeconds, kShakeDecay);
+		}
+		else if (ShakeAmp > 0.f)
+		{
+			ShakeAmp = 0.f;
+			OverheadCamera->SetActorLocation(CameraBaseLoc);
+		}
 	}
 
 	// Redraw active zones as flat translucent cylinders (one frame each tick).
@@ -475,6 +506,28 @@ void AReplayPlayer::SpawnVerbFX(UNiagaraSystem* System, const FVector& Loc,
 	}
 }
 
+void AReplayPlayer::TriggerJuice(double DamageFraction)
+{
+	// Law 6: derived from the damage event's fraction of the victim's max HP. Modulates
+	// only the shared clock (hit-stop) and the camera (shake) + a crunch cue - never the
+	// event or the log. Gated by the master switch so G1b (on vs off) is byte-identical.
+	if (!bJuiceEnabled) { return; }
+
+	double Stop = 0.0;
+	if (DamageFraction >= 0.50)      { Stop = kHitStop50; }
+	else if (DamageFraction >= 0.25) { Stop = kHitStop25; }
+	// Max so the biggest simultaneous hit dominates rather than summing.
+	HitStopRemaining = FMath::Max(HitStopRemaining, Stop);
+
+	// Screen shake: amplitude proportional to the fraction, capped at a readable max.
+	ShakeAmp = FMath::Min(kShakeMaxAmp, ShakeAmp + (float)DamageFraction * kShakeMaxAmp);
+
+	// Crunch: three tiers keyed to the same fractions (silent until samples are assigned).
+	USoundBase* Crunch = (DamageFraction >= 0.50) ? CrunchTierMax
+		: (DamageFraction >= 0.25) ? CrunchTierHeavy : CrunchTierLight;
+	if (Crunch) { UGameplayStatics::PlaySound2D(this, Crunch); }
+}
+
 void AReplayPlayer::SpawnZoneDecal(const FVector& CenterSim, double RadiusSim, float Opacity, int32 ZoneId)
 {
 	UWorld* World = GetWorld();
@@ -527,6 +580,8 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 			const double Frac = (E->MaxHp > 0.0) ? (Amt / E->MaxHp) : 0.0;
 			const float S = FMath::Clamp(0.6f + 0.8f * (float)Frac, 0.4f, 3.0f);
 			SpawnVerbFX(DamageFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), Elem, S);
+			// Law 6 juice: hit-stop / shake / crunch keyed to the damage fraction.
+			TriggerJuice(Frac);
 		}
 		if (bKilled)
 		{
