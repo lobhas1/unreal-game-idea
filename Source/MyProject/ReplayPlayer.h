@@ -160,6 +160,7 @@ private:
 	// --- loading ---
 	bool LoadReplay();
 	void ClassifyDeliveries();   // resolve each CastStarted's delivery from the event stream
+	void LoadManifestElements(); // showcase spell id -> concept element, from the manifest
 	void BuildScaffold();
 	FVector SimToWorld(const FVector& Sim) const;
 
@@ -225,6 +226,12 @@ private:
 	// added on StatusApplied and shattered on StatusRemoved.
 	TArray<FActiveStatus> ActiveStatuses;
 	static constexpr double kRegenMoteInterval = 0.6; // sim-seconds between regen motes
+
+	// Concept-element tinting (Step H / G2): a showcase spell wears its manifest concept
+	// palette. CurrentConceptElement is set from the manifest on each cast and fed as the
+	// concept level of the two-level law; empty for M1 fights (no manifest entry).
+	TMap<FString, FString> SpellElement; // lowercased spell id -> lowercased element
+	FString CurrentConceptElement;
 
 	// Spawn a verb archetype at Loc. When ClauseElement is non-empty the burst is
 	// element-tinted via the two-level law (User.Color); otherwise the system's

@@ -63,6 +63,8 @@ void AReplayPlayer::BeginPlay()
 	SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	ShieldMat  = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/M2/Materials/M_ShieldShell.M_ShieldShell"));
 
+	LoadManifestElements(); // concept-element palette per showcase spell (G2)
+
 	bLoaded = LoadReplay();
 	if (!bLoaded)
 	{
@@ -200,6 +202,29 @@ bool AReplayPlayer::LoadReplay()
 
 	ClassifyDeliveries();
 	return Events.Num() > 0;
+}
+
+void AReplayPlayer::LoadManifestElements()
+{
+	// Read the showcase manifest so a spell wears its concept-element palette (G2). Absent
+	// for the M1 fights, which is fine - their casts then resolve with an empty concept.
+	const FString Path = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Replays/Showcases/manifest.json"));
+	FString Raw;
+	if (!FFileHelper::LoadFileToString(Raw, *Path)) { return; }
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Raw);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) { return; }
+	const TArray<TSharedPtr<FJsonValue>>* Spells = nullptr;
+	if (!Root->TryGetArrayField(TEXT("spells"), Spells) || !Spells) { return; }
+	for (const TSharedPtr<FJsonValue>& V : *Spells)
+	{
+		const TSharedPtr<FJsonObject> O = V->AsObject();
+		if (!O.IsValid()) { continue; }
+		FString Id, Elem;
+		O->TryGetStringField(TEXT("id"), Id);
+		O->TryGetStringField(TEXT("element"), Elem);
+		if (!Id.IsEmpty()) { SpellElement.Add(Id.ToLower(), Elem.ToLower()); }
+	}
 }
 
 void AReplayPlayer::ClassifyDeliveries()
@@ -539,12 +564,11 @@ void AReplayPlayer::SpawnVerbFX(UNiagaraSystem* System, const FVector& Loc,
 	if (UNiagaraComponent* Comp =
 		UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, System, Loc))
 	{
-		if (!ClauseElement.IsEmpty())
+		// Two-level element law: clause element tints where present, else inherit the
+		// current cast's concept element (from the manifest; empty for M1 fights).
+		if (!ClauseElement.IsEmpty() || !CurrentConceptElement.IsEmpty())
 		{
-			// Two-level element law: the clause (event) element tints. Concept and
-			// highest-share are not carried by M1 fixture events, so pass empty and
-			// let Law 3's fallbacks apply.
-			const FElementPalette Pal = ReplayGrammar::Resolve(FString(), ClauseElement, FString());
+			const FElementPalette Pal = ReplayGrammar::Resolve(CurrentConceptElement, ClauseElement, FString());
 			Comp->SetVariableLinearColor(TEXT("User.Color"), Pal.Primary);
 		}
 		Comp->SetVariableFloat(TEXT("User.Scale"), Scale);
@@ -623,7 +647,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		{
 			FString Elem; P->TryGetStringField(TEXT("element"), Elem);
 			const double Frac = (E->MaxHp > 0.0) ? (Amt / E->MaxHp) : 0.0;
-			const FElementPalette Pal = ReplayGrammar::Resolve(FString(), Elem, FString());
+			const FElementPalette Pal = ReplayGrammar::Resolve(CurrentConceptElement, Elem, FString());
 			// Floating number: element-tinted, scaled with the amount, camera-facing
 			// (DrawDebugString always billboards to the view).
 			const float NumScale = FMath::Clamp(1.0f + 2.0f * (float)Frac, 1.0f, 3.0f);
@@ -738,6 +762,8 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		int32 Caster = 0; P->TryGetNumberField(TEXT("caster"), Caster);
 		FString Spell; P->TryGetStringField(TEXT("spell"), Spell);
 		Float(HeadOf(Caster) + FVector(0, 0, 40.f), Spell, FColor::White);
+		// Concept-element palette for this cast's clauses (empty if not a showcase spell).
+		CurrentConceptElement = SpellElement.FindRef(Spell.ToLower());
 
 		// Delivery trajectory (Step D), resolved from the event stream by
 		// ClassifyDeliveries. Element tint comes from the resolving effect's element.
@@ -749,7 +775,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 			{
 				const FVector FromW = SimToWorld(CE->CurrentSim) + FVector(0, 0, 120.f);
 				const FVector ToW   = SimToWorld(TE->CurrentSim) + FVector(0, 0, 120.f);
-				const FElementPalette Pal = ReplayGrammar::Resolve(FString(), Event.EffectElement, FString());
+				const FElementPalette Pal = ReplayGrammar::Resolve(CurrentConceptElement, Event.EffectElement, FString());
 				if (Event.EffectT - Event.T < kHitscanGap)
 				{
 					// gap ~ 0 -> hitscan: an instant element-tinted streak.
