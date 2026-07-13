@@ -306,19 +306,26 @@ void AReplayPlayer::BuildScaffold()
 		DrawDebugString(World, FVector(0, 0, kHeadOffsetZ), E.Name, Cap, FColor::White, -1.f, true);
 	}
 
-	// --- Overhead camera ---
+	// --- Cameras: canonical three-quarter tracking view + retired overhead (debug) ---
 	{
 		const FVector Above = SimToWorld(CenterSim) + FVector(0, 0, FMath::Max(SpanSim.X, SpanSim.Y) * WorldScale + 900.f);
-		ACameraActor* Cam = World->SpawnActor<ACameraActor>(Above, FRotator(-90.f, 0.f, 0.f));
-		if (Cam)
+		if (ACameraActor* OCam = World->SpawnActor<ACameraActor>(Above, FRotator(-90.f, 0.f, 0.f)))
 		{
-			Cam->SetActorLabel(TEXT("ReplayOverheadCamera"));
-			OverheadCamera = Cam;
-			CameraBaseLoc = Above; // rest pose the shake offsets around
-			if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
-			{
-				PC->SetViewTarget(Cam);
-			}
+			OCam->SetActorLabel(TEXT("ReplayOverheadCamera"));
+			OverheadCamera = OCam;
+		}
+		if (ACameraActor* TCam = World->SpawnActor<ACameraActor>(Above, FRotator(kCamPitch, kCamYaw, 0.f)))
+		{
+			TCam->SetActorLabel(TEXT("ReplayTrackingCamera"));
+			TrackingCamera = TCam;
+		}
+		UpdateTrackingCamera(0.f); // snap-frame the tracking camera before first draw
+
+		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+		{
+			ACameraActor* View = bDebugOverheadCamera ? OverheadCamera.Get() : TrackingCamera.Get();
+			if (View) { PC->SetViewTarget(View); }
+			if (bDebugOverheadCamera) { CameraBaseLoc = Above; }
 		}
 	}
 
@@ -328,6 +335,37 @@ void AReplayPlayer::BuildScaffold()
 	{
 		Light->SetActorLabel(TEXT("ReplaySun"));
 	}
+}
+
+void AReplayPlayer::UpdateTrackingCamera(float DeltaSeconds)
+{
+	if (!TrackingCamera.IsValid() || Entities.Num() == 0) { return; }
+
+	// Frame both fighters: midpoint + spread of their current world positions.
+	FVector Mid = FVector::ZeroVector;
+	FVector Lo(TNumericLimits<float>::Max()), Hi(TNumericLimits<float>::Lowest());
+	for (const FReplayEntity& E : Entities)
+	{
+		const FVector W = SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f);
+		Mid += W;
+		Lo = Lo.ComponentMin(W);
+		Hi = Hi.ComponentMax(W);
+	}
+	Mid /= (float)Entities.Num();
+
+	// Distance so both fit with comfortable margin; pitched down ~55 deg, three-quarter yaw.
+	const float Spread = FVector::Dist(Lo, Hi);
+	const float R = FMath::Clamp(Spread * 1.6f + 700.f, 800.f, 5000.f);
+	const FRotator Rot(kCamPitch, kCamYaw, 0.f);
+	const FVector DesiredLoc = Mid - Rot.Vector() * R;
+
+	// Snap on the first frame (DeltaSeconds<=0), then track smoothly with no cuts.
+	// Interp from the stored base (not the actor location) so shake offsets never feed back.
+	const FVector NewLoc = (DeltaSeconds <= 0.f)
+		? DesiredLoc
+		: FMath::VInterpTo(CameraBaseLoc, DesiredLoc, DeltaSeconds, 3.0f);
+	TrackingCamera->SetActorLocationAndRotation(NewLoc, Rot);
+	CameraBaseLoc = NewLoc; // screen shake offsets around this base
 }
 
 void AReplayPlayer::Tick(float DeltaSeconds)
@@ -366,22 +404,30 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 		}
 	}
 
-	// Screen shake: applied every frame (including during hit-stop so the impact reads),
-	// amplitude decaying to rest. Only damage sets ShakeAmp (via TriggerJuice).
-	if (OverheadCamera.IsValid())
+	// Camera law: the three-quarter tracking view is canonical; UpdateTrackingCamera
+	// frames both fighters and refreshes CameraBaseLoc. Overhead is the debug fallback.
+	if (!bDebugOverheadCamera)
+	{
+		UpdateTrackingCamera(DeltaSeconds);
+	}
+	ACameraActor* ActiveCam = bDebugOverheadCamera ? OverheadCamera.Get() : TrackingCamera.Get();
+
+	// Screen shake: offset the active camera around its base (runs during hit-stop too so
+	// the impact reads). Amplitude decays to rest; only damage sets it (via TriggerJuice).
+	if (ActiveCam)
 	{
 		if (ShakeAmp > 0.05f)
 		{
 			const FVector Off(FMath::FRandRange(-ShakeAmp, ShakeAmp),
 			                  FMath::FRandRange(-ShakeAmp, ShakeAmp),
 			                  FMath::FRandRange(-ShakeAmp, ShakeAmp));
-			OverheadCamera->SetActorLocation(CameraBaseLoc + Off);
+			ActiveCam->SetActorLocation(CameraBaseLoc + Off);
 			ShakeAmp = FMath::FInterpTo(ShakeAmp, 0.f, DeltaSeconds, kShakeDecay);
 		}
 		else if (ShakeAmp > 0.f)
 		{
 			ShakeAmp = 0.f;
-			OverheadCamera->SetActorLocation(CameraBaseLoc);
+			ActiveCam->SetActorLocation(CameraBaseLoc);
 		}
 	}
 
@@ -570,14 +616,19 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		int32 Target = 0; P->TryGetNumberField(TEXT("target"), Target);
 		double Amt = 0; P->TryGetNumberField(TEXT("amount"), Amt);
 		bool bKilled = false; P->TryGetBoolField(TEXT("killed"), bKilled);
-		Float(HeadOf(Target), FString::Printf(TEXT("-%d"), FMath::RoundToInt(Amt)), FColor::Red);
 
-		// M2 damage archetype: element-tinted impact burst at the target, scaled by
-		// damage share of the victim's max HP.
+		// M2 damage archetype: element-tinted impact burst at the target, scaled by damage
+		// share of the victim's max HP, plus an element-tinted amount-scaled damage number.
 		if (FReplayEntity* E = FindEntity(Target))
 		{
 			FString Elem; P->TryGetStringField(TEXT("element"), Elem);
 			const double Frac = (E->MaxHp > 0.0) ? (Amt / E->MaxHp) : 0.0;
+			const FElementPalette Pal = ReplayGrammar::Resolve(FString(), Elem, FString());
+			// Floating number: element-tinted, scaled with the amount, camera-facing
+			// (DrawDebugString always billboards to the view).
+			const float NumScale = FMath::Clamp(1.0f + 2.0f * (float)Frac, 1.0f, 3.0f);
+			DrawDebugString(World, HeadOf(Target), FString::Printf(TEXT("-%d"), FMath::RoundToInt(Amt)),
+				nullptr, Pal.Primary.ToFColor(true), kLabelSeconds, true, NumScale);
 			const float S = FMath::Clamp(0.6f + 0.8f * (float)Frac, 0.4f, 3.0f);
 			SpawnVerbFX(DamageFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), Elem, S);
 			// Law 6 juice: hit-stop / shake / crunch keyed to the damage fraction.

@@ -142,6 +142,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay")
 	bool bJuiceEnabled = true;
 
+	/** Camera law: the three-quarter angled tracking view is canonical. Set true to fall
+	 *  back to the retired straight-down overhead camera (debug only). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay")
+	bool bDebugOverheadCamera = false;
+
 	/** Optional crunch impact sounds, one per tier (light/heavy/max). Null => silent
 	 *  (concrete samples are a deferred asset; the tiering + trigger stand regardless). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay|Juice")
@@ -178,6 +183,10 @@ private:
 	// --- scene ---
 	TWeakObjectPtr<AStaticMeshActor> Floor;
 	TWeakObjectPtr<ACameraActor> OverheadCamera;
+	TWeakObjectPtr<ACameraActor> TrackingCamera; // three-quarter canonical view
+	void UpdateTrackingCamera(float DeltaSeconds); // frames both fighters at ~55 deg pitch
+	static constexpr float kCamPitch = -55.0f;
+	static constexpr float kCamYaw = -55.0f;
 	UStaticMesh* CubeMesh = nullptr;
 	UStaticMesh* CylinderMesh = nullptr;
 
