@@ -179,3 +179,22 @@ and the `bTextVisible` toggle on `AReplayPlayer` — ships in this build (commit
 presentation-only, frost-ember G1 re-checked byte-identical). The default map fix
 (`GameDefaultMap`/`EditorStartupMap` -> `/Game/Untitled`) is committed so a plain Play delivers
 the ratified experience.
+
+## Patch pass v2 (tag `m2-frozen-v2`) — presentation-only fixes
+
+Three presentation fixes on top of the frozen renderer, none of which touch the REPLAY| log:
+1. **Zone decal (`M_ZoneDecal` + `SpawnZoneDecal`).** Added a circular radial opacity mask
+   (`saturate(1 - distance(UV,(0.5,0.5))*2) * Opacity`); the decal is element-tinted via the
+   two-level law (concept palette from the manifest, clause element where present), sized from
+   the `ZoneSpawned` radius (Law 2), with a low-alpha translucent fill (fill 0.35 / telegraph 0.12).
+   Confirmed rendering on the fire groundAoE showcase **blaze** (circular orange translucent fill;
+   see `docs/screenshots/spawnZone-groundAoE-blaze-v2.png`). Note: **smoke**'s zone sits under the
+   OpenWorld template's water plane, so blaze is the clearer demonstrator of the corrected decal.
+2. **Camera framing.** Reverted to the M2-G three-quarter framing (`R = clamp(spread*1.6 + 700,
+   800, 5000)`, default FOV) after an interim tighten was judged too close; pitch/midpoint-tracking
+   law unchanged.
+3. **`ReplaySun`.** `ForwardShadingPriority = 10` so it wins the forward-shading directional-light
+   selection — removes the "multiple directional lights competing" editor warning from captures.
+
+**Re-verification:** full G1 on **frost-ember AND warden**, 1x and 4x, byte-identical to
+`docs/references/` (and 1x==4x for both). Presentation fixes moved zero bytes.

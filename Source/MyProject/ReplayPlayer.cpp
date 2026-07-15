@@ -436,7 +436,6 @@ void AReplayPlayer::BuildScaffold()
 		if (ACameraActor* TCam = World->SpawnActor<ACameraActor>(Above, FRotator(kCamPitch, kCamYaw, 0.f)))
 		{
 			TCam->SetActorLabel(TEXT("ReplayTrackingCamera"));
-			if (UCameraComponent* CC = TCam->GetCameraComponent()) { CC->SetFieldOfView(60.f); } // tighter frame (3b patch)
 			TrackingCamera = TCam;
 		}
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
@@ -479,10 +478,9 @@ void AReplayPlayer::UpdateTrackingCamera(float DeltaSeconds)
 	}
 	Mid /= (float)Entities.Num();
 
-	// Distance so both fill a sensible fraction of the frame; pitched down ~55 deg,
-	// three-quarter yaw (law unchanged - only the framing distance tightens vs M2-G).
+	// Distance so both fit with comfortable margin; pitched down ~55 deg, three-quarter yaw.
 	const float Spread = FVector::Dist(Lo, Hi);
-	const float R = FMath::Clamp(Spread * 1.2f + 350.f, 500.f, 2600.f);
+	const float R = FMath::Clamp(Spread * 1.6f + 700.f, 800.f, 5000.f);
 	const FRotator Rot(kCamPitch, kCamYaw, 0.f);
 	const FVector DesiredLoc = Mid - Rot.Vector() * R;
 
