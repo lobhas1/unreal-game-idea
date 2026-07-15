@@ -103,32 +103,79 @@ BeginPlay. Across the **entire** M2 validation session (all fights + showcases):
 `LogReplay` errors, 0 warnings, 0 failed-to-load**. Combined with the zero-gap coverage
 above, no showcase can produce a missing-asset render. **PASS.**
 
-### Live showcase playthrough
-PIE-ran a family-covering subset at 4x, each played through with **0 errors**: beacon
-(light/targetUnit), ember (fire/projectile), cinder-rock (earth/projectile), droplet
-(water/self), gust (air/targetUnit), smoke (shadow/groundAoE). This exercises every
-element's concept tinting and every delivery live; the three M1 fights already exercised
-every verb and most statuses live under G1.
+### Live showcase playthrough — all 26 individually, 4x, zero errors (ruling-mandated re-run, 2026-07-15)
+Per the G2 ruling, every one of the 26 showcases was PIE-run **individually at 4x** and played
+through to completion. Method: MCP-driven PIE — for each showcase the placed `ReplayPlayer`
+had its `ReplayPath` set to `Replays/Showcases/<name>.replay.json` and `SpeedMultiplier` set
+to 4, PIE was started (`PlayMode_InViewPort`), the run was held until the
+`ReplayPlayer: fight end` line confirmed every event had fired, then PIE was stopped with a
+~3s idle boundary before the next (the batch was recorded to one video with seekable
+boundaries). For each showcase the rendered REPLAY| line count was extracted from
+`Saved/Logs/MyProject.log`; **it equals the showcase's event count in every case**, which is
+the proof that the full event stream fired. **Zero `LogReplay` errors or warnings** in every
+run's log segment. The composition-stress cases ran clean: **lighthouse** (5 verb families in
+one cast, 76 lines), **murk-7ff0b332** (64), **conflagration** (43), **blaze** (41).
 
-### OPEN items (disclosed, not silently skipped)
-1. **All-26 individual PIE runs.** I validated a 6-showcase subset covering every element,
-   delivery, and verb family live, plus the exhaustive coverage table above. I did **not**
-   PIE-run each of the 26 individually. Justification: all showcases share one loaded asset
-   set and one code path, so per-showcase runs re-confirm identical loads; the coverage
-   table is the exhaustive token proof and the session logged zero errors. Flagged as a
-   deviation from the literal "play all 26" instruction.
-2. **Per-family screenshots into `docs/screenshots/`.** Not captured. `CaptureViewport`
-   requires an explicit pose and returns large base64 (unsuitable to route through this
-   session), and the clean path (`HighResShot` console command -> `Saved/Screenshots`) needs
-   console-exec, which the available MCP toolset does not expose. Representative showcase per
-   family for a one-pass human capture: damage/projectile=ember, heal/self=droplet,
-   shield=cinder-rock, applyStatus=umbra, modifyStat=glimmer, displace=gust,
-   spawnZone/groundAoE=smoke, targetUnit=beacon.
+| showcase | duration (s) | REPLAY lines | errors |
+|---|---|---|---|
+| beacon | 6.4 | 5 | 0 |
+| blaze | 6.4 | 41 | 0 |
+| cairn | 6.4 | 4 | 0 |
+| cairn-2184858c | 6.4 | 3 | 0 |
+| cinder-rock | 6.4 | 15 | 0 |
+| conflagration | 6.8 | 43 | 0 |
+| dewdrop-lens | 6.4 | 4 | 0 |
+| drift | 3.5 | 3 | 0 |
+| droplet | 1.0 | 2 | 0 |
+| dust-devil | 6.4 | 20 | 0 |
+| ember | 6.0 | 14 | 0 |
+| glimmer | 6.0 | 2 | 0 |
+| gust | 1.0 | 2 | 0 |
+| hearthstone | 11.8 | 5 | 0 |
+| lighthouse | 17.3 | 76 | 0 |
+| mist | 6.0 | 13 | 0 |
+| mudstone-mirror | 11.8 | 4 | 0 |
+| murk | 6.0 | 5 | 0 |
+| murk-7ff0b332 | 17.3 | 64 | 0 |
+| pebble | 6.0 | 2 | 0 |
+| penumbra | 6.4 | 4 | 0 |
+| pyre-cairn | 11.8 | 30 | 0 |
+| riverstone | 11.8 | 24 | 0 |
+| smoke | 8.4 | 34 | 0 |
+| steam | 3.9 | 8 | 0 |
+| umbra | 6.0 | 3 | 0 |
+
+All 26 showcases: **26/26 played through, 430 REPLAY| lines total, 0 errors.**
+
+### Screenshots — one per verb & delivery family (CAPTURED 2026-07-15)
+Eight stills committed to `docs/screenshots/`, one per verb & delivery family. Captured
+autonomously (tooling blocker resolved): a PowerShell `Graphics.CopyFromScreen` of the
+editor during PIE, timed to each family's defining event (first DamageDealt, first Healed,
+first ShieldGranted, StatusApplied, StatModified, Displaced, ZoneSpawned+~2s, targetUnit hit)
+plus a small bloom lead, each verified non-uniform (stdev ~63, ~120-130 distinct colours).
+
+| family | representative | file |
+|---|---|---|
+| damage / projectile | ember | `damage-projectile-ember.png` |
+| heal / self | droplet | `heal-self-droplet.png` |
+| shield | cinder-rock | `shield-cinder-rock.png` |
+| applyStatus | umbra | `applyStatus-umbra.png` |
+| modifyStat | glimmer | `modifyStat-glimmer.png` |
+| displace | gust | `displace-gust.png` |
+| spawnZone / groundAoE | smoke | `spawnZone-groundAoE-smoke.png` |
+| targetUnit | beacon | `targetUnit-beacon.png` |
 
 ## Verdict
 
-G1 (three fights, juice on, 1x/4x) **PASS**. G1b (juice on/off) **PASS**. G2 concept-element
-tinting wired; coverage zero-gap and zero placeholder/missing-asset **PASS**; live playthrough
-**PASS** on a family-covering subset. Two G2 sub-requirements remain **OPEN** and disclosed
-above: individual all-26 PIE runs, and per-family screenshots (blocked by available tooling).
-G3 is a separate registered protocol (fresh tester), out of scope here.
+G1 (three fights, juice on, 1x/4x) **PASS** — byte-identical to `docs/references/` at 1x and 4x,
+re-verified on a clean-rebuilt binary and again with the Step-3b browser/toggle build active.
+G1b (juice on/off) **PASS**. G2: concept-element tinting wired; coverage zero-gap and zero
+placeholder/missing-asset **PASS**; **all 26 showcases** PIE-run individually at 4x, played
+through fully, **0 errors** (table above); per-family screenshots **captured** (table above).
+**Both previously-open G2 sub-requirements are now closed.** **G2 PASS.**
+
+G3 remains a separate registered protocol (fresh tester); its apparatus — the showcase browser
+and the `bTextVisible` toggle on `AReplayPlayer` — ships in this build (commit `M2-3b`,
+presentation-only, frost-ember G1 re-checked byte-identical). The default map fix
+(`GameDefaultMap`/`EditorStartupMap` -> `/Game/Untitled`) is committed so a plain Play delivers
+the ratified experience.
