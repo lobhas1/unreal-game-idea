@@ -243,7 +243,8 @@ private:
 	// -> remove on ZoneExpired.
 	UMaterialInterface* ZoneDecalMat = nullptr;
 	TArray<FActiveDecal> Decals;
-	void SpawnZoneDecal(const FVector& CenterSim, double RadiusSim, float Opacity, int32 ZoneId);
+	void SpawnZoneDecal(const FVector& CenterSim, double RadiusSim, float Opacity, int32 ZoneId,
+	                    const FString& ClauseElement); // element tint via two-level law (Step 3b patch)
 
 	// Status sigils (Step E): persistent docked text glyphs, one per active status,
 	// added on StatusApplied and shattered on StatusRemoved.

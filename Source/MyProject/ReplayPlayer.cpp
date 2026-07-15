@@ -14,6 +14,7 @@
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Engine/DirectionalLight.h"
+#include "Components/DirectionalLightComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/DecalComponent.h"
@@ -435,6 +436,7 @@ void AReplayPlayer::BuildScaffold()
 		if (ACameraActor* TCam = World->SpawnActor<ACameraActor>(Above, FRotator(kCamPitch, kCamYaw, 0.f)))
 		{
 			TCam->SetActorLabel(TEXT("ReplayTrackingCamera"));
+			if (UCameraComponent* CC = TCam->GetCameraComponent()) { CC->SetFieldOfView(60.f); } // tighter frame (3b patch)
 			TrackingCamera = TCam;
 		}
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
@@ -443,10 +445,17 @@ void AReplayPlayer::BuildScaffold()
 			if (View) { PC->SetViewTarget(View); }
 			if (bDebugOverheadCamera) { CameraBaseLoc = Above; }
 		}
-		if (AActor* Light = World->SpawnActor<AActor>(ADirectionalLight::StaticClass(),
+		if (ADirectionalLight* Sun = World->SpawnActor<ADirectionalLight>(
 				FVector(0, 0, 1000.f), FRotator(-60.f, 30.f, 0.f)))
 		{
-			Light->SetActorLabel(TEXT("ReplaySun"));
+			Sun->SetActorLabel(TEXT("ReplaySun"));
+			// Win the forward-shading directional-light selection uniquely so the editor's
+			// "multiple directional lights competing" warning stays out of captures (3b patch).
+			if (UDirectionalLightComponent* LC = Cast<UDirectionalLightComponent>(Sun->GetLightComponent()))
+			{
+				LC->ForwardShadingPriority = 10;
+				LC->MarkRenderStateDirty();
+			}
 		}
 		bScaffoldInit = true;
 	}
@@ -470,9 +479,10 @@ void AReplayPlayer::UpdateTrackingCamera(float DeltaSeconds)
 	}
 	Mid /= (float)Entities.Num();
 
-	// Distance so both fit with comfortable margin; pitched down ~55 deg, three-quarter yaw.
+	// Distance so both fill a sensible fraction of the frame; pitched down ~55 deg,
+	// three-quarter yaw (law unchanged - only the framing distance tightens vs M2-G).
 	const float Spread = FVector::Dist(Lo, Hi);
-	const float R = FMath::Clamp(Spread * 1.6f + 700.f, 800.f, 5000.f);
+	const float R = FMath::Clamp(Spread * 1.2f + 350.f, 500.f, 2600.f);
 	const FRotator Rot(kCamPitch, kCamYaw, 0.f);
 	const FVector DesiredLoc = Mid - Rot.Vector() * R;
 
@@ -710,19 +720,28 @@ void AReplayPlayer::TriggerJuice(double DamageFraction)
 	if (Crunch) { UGameplayStatics::PlaySound2D(this, Crunch); }
 }
 
-void AReplayPlayer::SpawnZoneDecal(const FVector& CenterSim, double RadiusSim, float Opacity, int32 ZoneId)
+void AReplayPlayer::SpawnZoneDecal(const FVector& CenterSim, double RadiusSim, float Opacity, int32 ZoneId,
+                                  const FString& ClauseElement)
 {
 	UWorld* World = GetWorld();
 	if (!World || !ZoneDecalMat) { return; }
 	const float R = FMath::Max((float)RadiusSim * WorldScale, 60.f);
-	// Project straight down onto the floor (pitch -90). DecalSize is a half-extent box.
+	// Project straight down onto the floor (pitch -90). DecalSize is a half-extent box sized
+	// from the event radius (Law 2); M_ZoneDecal masks it to a circle inscribed in that box.
 	UDecalComponent* Dec = UGameplayStatics::SpawnDecalAtLocation(
 		World, ZoneDecalMat, FVector(256.f, R, R), SimToWorld(CenterSim), FRotator(-90.f, 0.f, 0.f), 0.f);
 	if (!Dec) { return; }
 	FActiveDecal AD;
 	AD.Decal = Dec;
 	AD.MID = Dec->CreateDynamicMaterialInstance();
-	if (AD.MID.IsValid()) { AD.MID->SetScalarParameterValue(TEXT("Opacity"), Opacity); }
+	if (AD.MID.IsValid())
+	{
+		AD.MID->SetScalarParameterValue(TEXT("Opacity"), Opacity);
+		// Two-level element law: clause element tints where present, else inherit the cast's
+		// concept palette (empty concept => arcane-neutral for M1 fights, which carry no zones).
+		const FElementPalette Pal = ReplayGrammar::Resolve(CurrentConceptElement, ClauseElement, FString());
+		AD.MID->SetVectorParameterValue(TEXT("TintColor"), Pal.Primary);
+	}
 	AD.CenterSim = CenterSim;
 	AD.ZoneId = ZoneId;
 	Decals.Add(AD);
@@ -920,10 +939,11 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		}
 		else if (Event.Delivery == EReplayDelivery::GroundAoE)
 		{
-			// groundAoE: faint telegraph decal at the future zone centre; the
-			// ZoneSpawned event fills it (Law 2 - centre/radius from the zone event).
+			// groundAoE: faint element-tinted telegraph decal at the future zone centre; the
+			// ZoneSpawned event fills it (Law 2 - centre/radius from the zone event). Empty clause
+			// element => inherits the cast's concept palette.
 			SpawnZoneDecal(Event.ZoneCenterSim,
-				Event.ZoneRadiusSim > 0.0 ? Event.ZoneRadiusSim : 2.0, 0.15f, -1);
+				Event.ZoneRadiusSim > 0.0 ? Event.ZoneRadiusSim : 2.0, 0.12f, -1, Event.EffectElement);
 		}
 	}
 	else if (Event.Type == TEXT("CastFailed"))
@@ -977,6 +997,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		FActiveZone Z;
 		P->TryGetNumberField(TEXT("id"), Z.Id);
 		P->TryGetNumberField(TEXT("size"), Z.RadiusSim);
+		FString ZoneElem; P->TryGetStringField(TEXT("element"), ZoneElem); // clause element, if any
 		const TSharedPtr<FJsonObject>* C = nullptr;
 		if (P->TryGetObjectField(TEXT("center"), C) && C)
 		{
@@ -986,8 +1007,8 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		}
 		Z.bActive = true;
 		Zones.Add(Z);
-		// spawnZone archetype: burst at the zone center.
-		SpawnVerbFX(ZoneFX, SimToWorld(Z.CenterSim) + FVector(0, 0, 20.f), FString(),
+		// spawnZone archetype: element-tinted burst at the zone center.
+		SpawnVerbFX(ZoneFX, SimToWorld(Z.CenterSim) + FVector(0, 0, 20.f), ZoneElem,
 			FMath::Clamp((float)Z.RadiusSim, 1.0f, 4.0f));
 
 		// Fill the groundAoE telegraph: adopt the pending decal at this centre and raise
@@ -999,7 +1020,12 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 			if (AD.ZoneId == -1 && FVector::DistSquared(AD.CenterSim, Z.CenterSim) < 1.0)
 			{
 				AD.ZoneId = Z.Id;
-				if (AD.MID.IsValid()) { AD.MID->SetScalarParameterValue(TEXT("Opacity"), 0.5f); }
+				if (AD.MID.IsValid())
+				{
+					AD.MID->SetScalarParameterValue(TEXT("Opacity"), 0.35f); // low-alpha fill
+					const FElementPalette Pal = ReplayGrammar::Resolve(CurrentConceptElement, ZoneElem, FString());
+					AD.MID->SetVectorParameterValue(TEXT("TintColor"), Pal.Primary);
+				}
 				if (AD.Decal.IsValid())
 				{
 					const float R = FMath::Max((float)Z.RadiusSim * WorldScale, 60.f);
@@ -1010,7 +1036,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 				break;
 			}
 		}
-		if (!bFilled) { SpawnZoneDecal(Z.CenterSim, Z.RadiusSim, 0.5f, Z.Id); }
+		if (!bFilled) { SpawnZoneDecal(Z.CenterSim, Z.RadiusSim, 0.35f, Z.Id, ZoneElem); }
 	}
 	else if (Event.Type == TEXT("ZoneExpired"))
 	{
