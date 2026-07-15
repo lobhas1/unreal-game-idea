@@ -23,6 +23,9 @@ class UNiagaraSystem;
 class UNiagaraComponent;
 class UDecalComponent;
 class UMaterialInstanceDynamic;
+class ASkeletalMeshActor;
+class USkeletalMesh;
+class UAnimSequence;
 
 /** Delivery trajectory of a cast, discovered from the event stream (Law 2), not
  *  from the manifest: an effect on another entity => Projectile; on the caster =>
@@ -58,7 +61,8 @@ struct FReplayEntity
 	FString Name;
 	double MaxHp = 0.0;
 	FVector Spawn = FVector::ZeroVector; // sim coordinates (unscaled)
-	TWeakObjectPtr<AStaticMeshActor> Capsule;
+	TWeakObjectPtr<ASkeletalMeshActor> Body;            // mannequin skeletal caster (Act 1)
+	TWeakObjectPtr<UMaterialInstanceDynamic> BodyMID;   // per-side BodyColor tint + death grey-out
 	FVector CurrentSim = FVector::ZeroVector; // current sim-space position
 	FVector TargetSim = FVector::ZeroVector;  // displace target (sim space)
 	bool bDead = false;
@@ -186,6 +190,13 @@ private:
 	int32 CurrentShowcaseIndex = -1; // index into ShowcaseOrder, or -1 when the current replay isn't a showcase
 	FString CurrentDisplayName;      // shown on screen as the browser label
 	bool bScaffoldInit = false;      // one-time spawn of persistent cameras + light
+
+	// --- skeletal casters (Act 1): mannequin body + a looping idle so the stance reads ---
+	USkeletalMesh* MannequinMesh = nullptr;
+	UAnimSequence* IdleAnim = nullptr;
+	// World location of an entity's head bone (label / sigil / damage-number anchor), or a
+	// sensible fallback above the sim position if the body isn't spawned.
+	FVector HeadWorld(const FReplayEntity& E) const;
 
 	// --- playback ---
 	void PlayReplayEvent(const FReplayEvent& Event);

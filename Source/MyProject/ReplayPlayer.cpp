@@ -11,6 +11,11 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
+#include "Animation/SkeletalMeshActor.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Animation/AnimSequence.h"
+#include "Animation/AnimationAsset.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Engine/DirectionalLight.h"
@@ -34,7 +39,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogReplay, Log, All);
 namespace
 {
 	constexpr float kLabelSeconds = 1.2f;   // wall-clock lifetime of a floating number
-	constexpr float kHeadOffsetZ  = 130.f;  // uu above capsule origin for labels
 }
 
 AReplayPlayer::AReplayPlayer()
@@ -48,6 +52,10 @@ void AReplayPlayer::BeginPlay()
 
 	CubeMesh     = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	CylinderMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+
+	// Act 1 skeletal casters: the UE4 mannequin + a looping idle for a natural stance.
+	MannequinMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/AnimStarterPack/UE4_Mannequin/Mesh/SK_Mannequin.SK_Mannequin"));
+	IdleAnim      = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/AnimStarterPack/Idle_Rifle_Hip.Idle_Rifle_Hip"));
 
 	// M2 verb archetypes (element-tinted via User.Color / scale from share). Loaded by
 	// soft path; grammar maps event type -> archetype, no per-spell authoring.
@@ -270,7 +278,7 @@ void AReplayPlayer::TeardownScene()
 	Decals.Empty();
 	for (FActiveShell& AS : Shells) { if (AS.Mesh.IsValid()) { AS.Mesh->Destroy(); } }
 	Shells.Empty();
-	for (FReplayEntity& E : Entities) { if (E.Capsule.IsValid()) { E.Capsule->Destroy(); } }
+	for (FReplayEntity& E : Entities) { if (E.Body.IsValid()) { E.Body->Destroy(); } }
 	Entities.Empty();
 	ActiveStatuses.Empty();
 	Zones.Empty();
@@ -406,21 +414,37 @@ void AReplayPlayer::BuildScaffold()
 		}
 	}
 
-	// --- Two capsule actors (cylinder mesh pillars) with name labels ---
+	// --- Skeletal mannequin casters (Act 1), tinted per side (A warm / B cool) so the two
+	// stay distinguishable; a looping idle gives a natural stance. Feet sit on the floor
+	// (z ~ 0); name labels/sigils/numbers anchor to the head bone (drawn per-tick in Tick). ---
+	const FVector CenterW = SimToWorld((SimMin + SimMax) * 0.5f);
+	int32 SideIdx = 0;
 	for (FReplayEntity& E : Entities)
 	{
-		if (!CylinderMesh) { break; }
-		FActorSpawnParameters P;
-		const FVector Loc = SimToWorld(E.Spawn) + FVector(0, 0, 100.f);
-		AStaticMeshActor* Cap = World->SpawnActor<AStaticMeshActor>(Loc, FRotator::ZeroRotator, P);
-		if (!Cap) { continue; }
-		Cap->SetMobility(EComponentMobility::Movable);
-		Cap->GetStaticMeshComponent()->SetStaticMesh(CylinderMesh);
-		Cap->SetActorScale3D(FVector(0.6f, 0.6f, 2.0f));
-		Cap->SetActorLabel(*FString::Printf(TEXT("Capsule_%s"), *E.Name));
-		E.Capsule = Cap;
-		// Name labels are drawn per-tick in Tick (gated by bTextVisible), not as a
-		// persistent attached string, so the G3 text toggle can hide them live.
+		if (!MannequinMesh) { break; }
+		const FVector Loc = SimToWorld(E.Spawn); // mannequin root is at the feet
+		FVector Face = CenterW - Loc; Face.Z = 0.f;      // face the arena centre
+		const FRotator Rot = Face.IsNearlyZero() ? FRotator::ZeroRotator : Face.Rotation();
+		ASkeletalMeshActor* Body = World->SpawnActor<ASkeletalMeshActor>(Loc, Rot);
+		if (!Body) { continue; }
+		USkeletalMeshComponent* SMC = Body->GetSkeletalMeshComponent();
+		if (SMC) { SMC->SetMobility(EComponentMobility::Movable); }
+		SMC->SetSkeletalMeshAsset(MannequinMesh);
+		if (IdleAnim)
+		{
+			SMC->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+			SMC->PlayAnimation(IdleAnim, true); // looping idle
+		}
+		if (UMaterialInstanceDynamic* MID = SMC->CreateDynamicMaterialInstance(0))
+		{
+			const FLinearColor Tint = (SideIdx == 0) ? FLinearColor(0.90f, 0.32f, 0.22f)  // A: warm
+			                                         : FLinearColor(0.28f, 0.48f, 0.95f); // B: cool
+			MID->SetVectorParameterValue(TEXT("BodyColor"), Tint);
+			E.BodyMID = MID;
+		}
+		Body->SetActorLabel(*FString::Printf(TEXT("Caster_%s"), *E.Name));
+		E.Body = Body;
+		++SideIdx;
 	}
 
 	// --- Cameras + light: spawned ONCE and kept across showcase reloads (the browser
@@ -519,13 +543,12 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 			++NextEventIndex;
 		}
 
-		// Interpolate capsule positions toward displace targets (held during hit-stop).
+		// Interpolate body positions toward displace targets (held during hit-stop).
 		for (FReplayEntity& E : Entities)
 		{
-			if (!E.Capsule.IsValid()) { continue; }
+			if (!E.Body.IsValid()) { continue; }
 			E.CurrentSim = FMath::VInterpTo(E.CurrentSim, E.TargetSim, DeltaSeconds, 8.f);
-			FVector Loc = SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f);
-			E.Capsule->SetActorLocation(Loc);
+			E.Body->SetActorLocation(SimToWorld(E.CurrentSim)); // mannequin feet on the floor
 		}
 	}
 
@@ -615,8 +638,7 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 			if (!E) { continue; }
 			int32& StackN = StackByEntity.FindOrAdd(AS.EntityId);
 			const FStatusGlyph G = ReplayStatus::GlyphFor(AS.Status);
-			const FVector Loc = SimToWorld(E->CurrentSim) +
-				FVector(0, 0, 100.f + kHeadOffsetZ + 30.f + StackN * 22.f);
+			const FVector Loc = HeadWorld(*E) + FVector(0, 0, 30.f + StackN * 22.f);
 			// Visual sigil marker: a tinted docked orb, one per active status, stacked.
 			// Always drawn so the status stays legible with text hidden (G3 apparatus);
 			// the word glyph beside it is text and gated by bTextVisible.
@@ -628,7 +650,7 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 			++StackN;
 			if (G.bRisingMotes && SimTime >= AS.NextMoteSim)
 			{
-				SpawnVerbFX(HealFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 60.f), FString(), 0.5f);
+				SpawnVerbFX(HealFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), FString(), 0.5f);
 				AS.NextMoteSim = SimTime + kRegenMoteInterval;
 			}
 		}
@@ -639,7 +661,7 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 	{
 		for (const FReplayEntity& E : Entities)
 		{
-			DrawDebugString(World, SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f + kHeadOffsetZ),
+			DrawDebugString(World, HeadWorld(E) + FVector(0, 0, 12.f),
 				E.Name, nullptr, FColor::White, 0.f, true);
 		}
 		DrawDebugString(World, SimToWorld((SimMin + SimMax) * 0.5f) + FVector(0, 0, 320.f),
@@ -674,6 +696,20 @@ FReplayEntity* AReplayPlayer::FindEntity(int32 Id)
 		if (E.Id == Id) { return &E; }
 	}
 	return nullptr;
+}
+
+FVector AReplayPlayer::HeadWorld(const FReplayEntity& E) const
+{
+	// Anchor labels/sigils/numbers to the mannequin's head bone; fall back above the sim
+	// position when the body isn't spawned (keeps everything working during teardown/reload).
+	if (E.Body.IsValid())
+	{
+		if (USkeletalMeshComponent* SMC = E.Body->GetSkeletalMeshComponent())
+		{
+			return SMC->GetSocketLocation(TEXT("head")) + FVector(0, 0, 25.f);
+		}
+	}
+	return SimToWorld(E.CurrentSim) + FVector(0, 0, 200.f);
 }
 
 void AReplayPlayer::SpawnVerbFX(UNiagaraSystem* System, const FVector& Loc,
@@ -753,10 +789,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 	const TSharedPtr<FJsonObject>& P = Event.Payload;
 	auto HeadOf = [this](int32 Id) -> FVector
 	{
-		if (FReplayEntity* E = FindEntity(Id))
-		{
-			return SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f + kHeadOffsetZ);
-		}
+		if (FReplayEntity* E = FindEntity(Id)) { return HeadWorld(*E); }
 		return FVector::ZeroVector;
 	};
 	auto Float = [this](const FVector& Loc, const FString& Text, const FColor& Color)
@@ -793,16 +826,12 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 			if (FReplayEntity* E = FindEntity(Target))
 			{
 				E->bDead = true;
-				if (E->Capsule.IsValid())
-				{
-					if (UMaterialInstanceDynamic* MID =
-						E->Capsule->GetStaticMeshComponent()->CreateDynamicMaterialInstance(0))
+				if (E->BodyMID.IsValid())
 					{
-						MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.3f, 0.3f, 0.3f, 1.f));
-						MID->SetVectorParameterValue(TEXT("BaseColor"), FLinearColor(0.3f, 0.3f, 0.3f, 1.f));
+						// Death grey-out: drain the per-side BodyColor tint to grey (Act 1 keeps
+						// the M1 grey-out; a Death montage is a later refinement).
+						E->BodyMID->SetVectorParameterValue(TEXT("BodyColor"), FLinearColor(0.3f, 0.3f, 0.3f, 1.f));
 					}
-					E->Capsule->SetActorScale3D(FVector(0.6f, 0.6f, 0.5f)); // slump
-				}
 			}
 		}
 	}
@@ -866,9 +895,9 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 						// concept element in G2. ShieldGranted carries no element (Law 3 inherit).
 						MID->SetVectorParameterValue(TEXT("TintColor"), FLinearColor(0.6f, 0.8f, 1.0f));
 					}
-					if (E->Capsule.IsValid())
+					if (E->Body.IsValid())
 					{
-						Shell->AttachToActor(E->Capsule.Get(), FAttachmentTransformRules::KeepWorldTransform);
+						Shell->AttachToActor(E->Body.Get(), FAttachmentTransformRules::KeepWorldTransform);
 					}
 					FActiveShell AS; AS.Mesh = Shell; AS.ExpireSim = Event.T + Dur;
 					Shells.Add(AS);
@@ -978,9 +1007,9 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 				SpawnVerbFX(DisplaceFX, FromW, FString(), 0.8f); // implosion at origin
 				SpawnVerbFX(DisplaceFX, ToW,   FString(), 1.0f); // appearance at destination
 			}
-			else if (DisplaceFX && World && E->Capsule.IsValid())
+			else if (DisplaceFX && World && E->Body.IsValid())
 			{
-				UNiagaraFunctionLibrary::SpawnSystemAttached(DisplaceFX, E->Capsule->GetRootComponent(),
+				UNiagaraFunctionLibrary::SpawnSystemAttached(DisplaceFX, E->Body->GetRootComponent(),
 					NAME_None, FVector(0, 0, 50.f), FRotator::ZeroRotator,
 					EAttachLocation::KeepRelativeOffset, true);
 			}
