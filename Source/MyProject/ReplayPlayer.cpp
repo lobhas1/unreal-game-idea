@@ -20,6 +20,8 @@
 #include "Sound/SoundBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
+#include "Components/InputComponent.h"
+#include "InputCoreTypes.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
@@ -63,19 +65,10 @@ void AReplayPlayer::BeginPlay()
 	SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	ShieldMat  = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/M2/Materials/M_ShieldShell.M_ShieldShell"));
 
-	LoadManifestElements(); // concept-element palette per showcase spell (G2)
+	LoadManifestElements(); // concept-element palette per showcase spell + ordered browser list (G2/3b)
 
-	bLoaded = LoadReplay();
-	if (!bLoaded)
-	{
-		UE_LOG(LogReplay, Error, TEXT("ReplayPlayer: failed to load '%s' - nothing to render."), *ReplayPath);
-		return;
-	}
-
-	UE_LOG(LogReplay, Display, TEXT("ReplayPlayer: loaded '%s' (%d events, %d entities, duration=%f, winner=%s, endReason=%s)"),
-		*ReplayPath, Events.Num(), Entities.Num(), DurationSeconds, *WinnerName, *EndReason);
-
-	BuildScaffold();
+	LoadAndBuild(ReplayPath); // initial load (TeardownScene is a no-op on the first call)
+	SetupBrowserInput();      // left/right cycle showcases, R replays current (PIE only)
 }
 
 bool AReplayPlayer::LoadReplay()
@@ -216,6 +209,7 @@ void AReplayPlayer::LoadManifestElements()
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()) { return; }
 	const TArray<TSharedPtr<FJsonValue>>* Spells = nullptr;
 	if (!Root->TryGetArrayField(TEXT("spells"), Spells) || !Spells) { return; }
+	ShowcaseOrder.Empty();
 	for (const TSharedPtr<FJsonValue>& V : *Spells)
 	{
 		const TSharedPtr<FJsonObject> O = V->AsObject();
@@ -223,7 +217,105 @@ void AReplayPlayer::LoadManifestElements()
 		FString Id, Elem;
 		O->TryGetStringField(TEXT("id"), Id);
 		O->TryGetStringField(TEXT("element"), Elem);
-		if (!Id.IsEmpty()) { SpellElement.Add(Id.ToLower(), Elem.ToLower()); }
+		if (!Id.IsEmpty())
+		{
+			SpellElement.Add(Id.ToLower(), Elem.ToLower());
+			ShowcaseOrder.Add(Id); // manifest order == browser cycle order (Step 3b)
+		}
+	}
+}
+
+void AReplayPlayer::LoadAndBuild(const FString& NewReplayPath)
+{
+	// Presentation-layer replay switch: tear down the current scene, load the new replay,
+	// rebuild the scaffold, and reset the shared clock. The event loop and the canonical
+	// REPLAY| echo are untouched, so G1 byte-identity holds for any replay we play.
+	TeardownScene();
+
+	ReplayPath = NewReplayPath;
+	SimTime = 0.0;
+	NextEventIndex = 0;
+	bFinished = false;
+	WinnerName.Empty();
+	EndReason.Empty();
+	CurrentConceptElement.Empty();
+
+	bLoaded = LoadReplay();
+	if (!bLoaded)
+	{
+		UE_LOG(LogReplay, Error, TEXT("ReplayPlayer: failed to load '%s' - nothing to render."), *ReplayPath);
+		return;
+	}
+	UE_LOG(LogReplay, Display, TEXT("ReplayPlayer: loaded '%s' (%d events, %d entities, duration=%f, winner=%s, endReason=%s)"),
+		*ReplayPath, Events.Num(), Entities.Num(), DurationSeconds, *WinnerName, *EndReason);
+
+	BuildScaffold();
+
+	// Browser label + index resolved from the path ("beacon.replay.json" -> "beacon").
+	CurrentDisplayName = FPaths::GetBaseFilename(NewReplayPath);
+	CurrentDisplayName.RemoveFromEnd(TEXT(".replay"));
+	CurrentShowcaseIndex = ShowcaseOrder.IndexOfByPredicate([&NewReplayPath](const FString& Id)
+	{
+		return NewReplayPath.Contains(FString::Printf(TEXT("Showcases/%s.replay.json"), *Id));
+	});
+}
+
+void AReplayPlayer::TeardownScene()
+{
+	// Destroy everything a single replay spawns; cameras + light persist (spawned once).
+	for (FActiveProjectile& PR : Projectiles) { if (PR.Comp.IsValid()) { PR.Comp->DestroyComponent(); } }
+	Projectiles.Empty();
+	for (FActiveDecal& AD : Decals) { if (AD.Decal.IsValid()) { AD.Decal->DestroyComponent(); } }
+	Decals.Empty();
+	for (FActiveShell& AS : Shells) { if (AS.Mesh.IsValid()) { AS.Mesh->Destroy(); } }
+	Shells.Empty();
+	for (FReplayEntity& E : Entities) { if (E.Capsule.IsValid()) { E.Capsule->Destroy(); } }
+	Entities.Empty();
+	ActiveStatuses.Empty();
+	Zones.Empty();
+	Events.Empty();
+	if (Floor.IsValid()) { Floor->Destroy(); Floor = nullptr; }
+}
+
+void AReplayPlayer::SetupBrowserInput()
+{
+	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	if (!PC) { return; }
+	EnableInput(PC);
+	if (InputComponent)
+	{
+		InputComponent->BindKey(EKeys::Left,  IE_Pressed, this, &AReplayPlayer::OnPrevShowcase);
+		InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &AReplayPlayer::OnNextShowcase);
+		InputComponent->BindKey(EKeys::R,     IE_Pressed, this, &AReplayPlayer::OnReplayCurrent);
+	}
+}
+
+void AReplayPlayer::OnPrevShowcase()
+{
+	if (ShowcaseOrder.Num() == 0) { return; }
+	CurrentShowcaseIndex = (CurrentShowcaseIndex <= 0) ? ShowcaseOrder.Num() - 1 : CurrentShowcaseIndex - 1;
+	LoadAndBuild(FString::Printf(TEXT("Replays/Showcases/%s.replay.json"), *ShowcaseOrder[CurrentShowcaseIndex]));
+}
+
+void AReplayPlayer::OnNextShowcase()
+{
+	if (ShowcaseOrder.Num() == 0) { return; }
+	CurrentShowcaseIndex = (CurrentShowcaseIndex + 1) % ShowcaseOrder.Num();
+	LoadAndBuild(FString::Printf(TEXT("Replays/Showcases/%s.replay.json"), *ShowcaseOrder[CurrentShowcaseIndex]));
+}
+
+void AReplayPlayer::OnReplayCurrent()
+{
+	LoadAndBuild(ReplayPath); // reload whatever is current (M1 fight or a showcase)
+}
+
+void AReplayPlayer::DrawLabel(const FVector& Loc, const FString& Text, const FColor& Color, float Scale)
+{
+	// Single gate for every piece of on-screen text (G3 apparatus). Cosmetic only.
+	if (!bTextVisible) { return; }
+	if (UWorld* W = GetWorld())
+	{
+		DrawDebugString(W, Loc, Text, nullptr, Color, kLabelSeconds, true, Scale);
 	}
 }
 
@@ -326,12 +418,13 @@ void AReplayPlayer::BuildScaffold()
 		Cap->SetActorScale3D(FVector(0.6f, 0.6f, 2.0f));
 		Cap->SetActorLabel(*FString::Printf(TEXT("Capsule_%s"), *E.Name));
 		E.Capsule = Cap;
-
-		// Floating name label that follows the capsule (attached via base actor).
-		DrawDebugString(World, FVector(0, 0, kHeadOffsetZ), E.Name, Cap, FColor::White, -1.f, true);
+		// Name labels are drawn per-tick in Tick (gated by bTextVisible), not as a
+		// persistent attached string, so the G3 text toggle can hide them live.
 	}
 
-	// --- Cameras: canonical three-quarter tracking view + retired overhead (debug) ---
+	// --- Cameras + light: spawned ONCE and kept across showcase reloads (the browser
+	// only swaps floor + capsules; the tracking camera reframes each Tick). ---
+	if (!bScaffoldInit)
 	{
 		const FVector Above = SimToWorld(CenterSim) + FVector(0, 0, FMath::Max(SpanSim.X, SpanSim.Y) * WorldScale + 900.f);
 		if (ACameraActor* OCam = World->SpawnActor<ACameraActor>(Above, FRotator(-90.f, 0.f, 0.f)))
@@ -344,22 +437,21 @@ void AReplayPlayer::BuildScaffold()
 			TCam->SetActorLabel(TEXT("ReplayTrackingCamera"));
 			TrackingCamera = TCam;
 		}
-		UpdateTrackingCamera(0.f); // snap-frame the tracking camera before first draw
-
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
 			ACameraActor* View = bDebugOverheadCamera ? OverheadCamera.Get() : TrackingCamera.Get();
 			if (View) { PC->SetViewTarget(View); }
 			if (bDebugOverheadCamera) { CameraBaseLoc = Above; }
 		}
+		if (AActor* Light = World->SpawnActor<AActor>(ADirectionalLight::StaticClass(),
+				FVector(0, 0, 1000.f), FRotator(-60.f, 30.f, 0.f)))
+		{
+			Light->SetActorLabel(TEXT("ReplaySun"));
+		}
+		bScaffoldInit = true;
 	}
 
-	// --- One directional light ---
-	if (AActor* Light = World->SpawnActor<AActor>(ADirectionalLight::StaticClass(),
-			FVector(0, 0, 1000.f), FRotator(-60.f, 30.f, 0.f)))
-	{
-		Light->SetActorLabel(TEXT("ReplaySun"));
-	}
+	UpdateTrackingCamera(0.f); // snap-frame to the (re)built capsules before first draw
 }
 
 void AReplayPlayer::UpdateTrackingCamera(float DeltaSeconds)
@@ -517,7 +609,14 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 			const FStatusGlyph G = ReplayStatus::GlyphFor(AS.Status);
 			const FVector Loc = SimToWorld(E->CurrentSim) +
 				FVector(0, 0, 100.f + kHeadOffsetZ + 30.f + StackN * 22.f);
-			DrawDebugString(World, Loc, G.Text, nullptr, G.Tint.ToFColor(true), 0.f, true);
+			// Visual sigil marker: a tinted docked orb, one per active status, stacked.
+			// Always drawn so the status stays legible with text hidden (G3 apparatus);
+			// the word glyph beside it is text and gated by bTextVisible.
+			DrawDebugSphere(World, Loc, 14.f, 8, G.Tint.ToFColor(true), false, 0.f, 0, 2.f);
+			if (bTextVisible)
+			{
+				DrawDebugString(World, Loc + FVector(0, 0, 12.f), G.Text, nullptr, G.Tint.ToFColor(true), 0.f, true);
+			}
 			++StackN;
 			if (G.bRisingMotes && SimTime >= AS.NextMoteSim)
 			{
@@ -525,6 +624,19 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 				AS.NextMoteSim = SimTime + kRegenMoteInterval;
 			}
 		}
+	}
+
+	// Entity name labels + the showcase-browser label. All text: gated by bTextVisible (G3).
+	if (World && bTextVisible)
+	{
+		for (const FReplayEntity& E : Entities)
+		{
+			DrawDebugString(World, SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f + kHeadOffsetZ),
+				E.Name, nullptr, FColor::White, 0.f, true);
+		}
+		DrawDebugString(World, SimToWorld((SimMin + SimMax) * 0.5f) + FVector(0, 0, 320.f),
+			FString::Printf(TEXT("< %s >   (left/right browse, R replay)"), *CurrentDisplayName),
+			nullptr, FColor(200, 230, 255), 0.f, true, 1.4f);
 	}
 
 	if (NextEventIndex >= Events.Num() && !bFinished)
@@ -630,9 +742,9 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		}
 		return FVector::ZeroVector;
 	};
-	auto Float = [World](const FVector& Loc, const FString& Text, const FColor& Color)
+	auto Float = [this](const FVector& Loc, const FString& Text, const FColor& Color)
 	{
-		DrawDebugString(World, Loc, Text, nullptr, Color, kLabelSeconds, true);
+		DrawLabel(Loc, Text, Color); // gated by bTextVisible (G3)
 	};
 
 	if (Event.Type == TEXT("DamageDealt"))
@@ -651,8 +763,9 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 			// Floating number: element-tinted, scaled with the amount, camera-facing
 			// (DrawDebugString always billboards to the view).
 			const float NumScale = FMath::Clamp(1.0f + 2.0f * (float)Frac, 1.0f, 3.0f);
-			DrawDebugString(World, HeadOf(Target), FString::Printf(TEXT("-%d"), FMath::RoundToInt(Amt)),
-				nullptr, Pal.Primary.ToFColor(true), kLabelSeconds, true, NumScale);
+			DrawLabel(HeadOf(Target), FString::Printf(TEXT("-%d"), FMath::RoundToInt(Amt)),
+				Pal.Primary.ToFColor(true), NumScale); // element-tinted, amount-scaled, gated
+
 			const float S = FMath::Clamp(0.6f + 0.8f * (float)Frac, 0.4f, 3.0f);
 			SpawnVerbFX(DamageFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), Elem, S);
 			// Law 6 juice: hit-stop / shake / crunch keyed to the damage fraction.
@@ -941,15 +1054,19 @@ void AReplayPlayer::FinishFight()
 	bFinished = true;
 	UE_LOG(LogReplay, Display, TEXT("ReplayPlayer: fight end - winner=%s reason=%s"), *WinnerName, *EndReason);
 
-	if (UWorld* World = GetWorld())
+	// Winner banner is text: gated by bTextVisible (G3). The log line above is not.
+	if (bTextVisible)
 	{
-		const FVector Center = SimToWorld((SimMin + SimMax) * 0.5f) + FVector(0, 0, 400.f);
-		DrawDebugString(World, Center, FString::Printf(TEXT("WINNER: %s"), *WinnerName),
-			nullptr, FColor::Yellow, 8.f, true, 2.f);
-	}
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Yellow,
-			FString::Printf(TEXT("WINNER: %s (%s)"), *WinnerName, *EndReason));
+		if (UWorld* World = GetWorld())
+		{
+			const FVector Center = SimToWorld((SimMin + SimMax) * 0.5f) + FVector(0, 0, 400.f);
+			DrawDebugString(World, Center, FString::Printf(TEXT("WINNER: %s"), *WinnerName),
+				nullptr, FColor::Yellow, 8.f, true, 2.f);
+		}
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Yellow,
+				FString::Printf(TEXT("WINNER: %s (%s)"), *WinnerName, *EndReason));
+		}
 	}
 }

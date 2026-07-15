@@ -147,6 +147,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay")
 	bool bDebugOverheadCamera = false;
 
+	/** G3 apparatus. When false, ALL on-screen TEXT is hidden - entity name labels,
+	 *  floating damage/heal numbers, cast + status word labels, the winner banner, and
+	 *  the showcase-browser label - leaving only the visuals and the tinted status
+	 *  sigil markers. Presentation-only: never touches the REPLAY| log (G1 holds). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay")
+	bool bTextVisible = true;
+
 	/** Optional crunch impact sounds, one per tier (light/heavy/max). Null => silent
 	 *  (concrete samples are a deferred asset; the tiering + trigger stand regardless). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay|Juice")
@@ -160,9 +167,25 @@ private:
 	// --- loading ---
 	bool LoadReplay();
 	void ClassifyDeliveries();   // resolve each CastStarted's delivery from the event stream
-	void LoadManifestElements(); // showcase spell id -> concept element, from the manifest
+	void LoadManifestElements(); // showcase spell id -> concept element (+ ordered list), from the manifest
 	void BuildScaffold();
 	FVector SimToWorld(const FVector& Sim) const;
+
+	// --- showcase browser (Step 3b): cycle the manifest's showcases live during PIE ---
+	// Presentation-only: swaps which replay plays and restarts its clock; the C# sim is
+	// still the sole authority and the REPLAY| echo is unchanged.
+	void SetupBrowserInput();
+	void OnPrevShowcase();
+	void OnNextShowcase();
+	void OnReplayCurrent();
+	void LoadAndBuild(const FString& NewReplayPath); // teardown + (re)load + rebuild + reset clock
+	void TeardownScene();                            // destroy per-replay actors/FX, clear state
+	void DrawLabel(const FVector& Loc, const FString& Text, const FColor& Color, float Scale = 1.f); // gated by bTextVisible
+
+	TArray<FString> ShowcaseOrder;   // ordered showcase ids from the manifest (browser order)
+	int32 CurrentShowcaseIndex = -1; // index into ShowcaseOrder, or -1 when the current replay isn't a showcase
+	FString CurrentDisplayName;      // shown on screen as the browser label
+	bool bScaffoldInit = false;      // one-time spawn of persistent cameras + light
 
 	// --- playback ---
 	void PlayReplayEvent(const FReplayEvent& Event);

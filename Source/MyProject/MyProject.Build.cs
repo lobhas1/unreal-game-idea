@@ -18,7 +18,8 @@ public class MyProject : ModuleRules
 			"Engine",
 			"Json",
 			"JsonUtilities",
-			"Niagara"
+			"Niagara",
+			"InputCore"   // EKeys/FKey for the showcase-browser key bindings (Step 3b)
 		});
 	}
 }
