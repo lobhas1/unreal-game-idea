@@ -147,4 +147,20 @@ Chunky flat-shaded rock silhouettes satisfy NO PERFECT PRIMITIVES natively.
 
 **Air is the faintest read** — translucent pale-cyan wind washes out against the white lab floor; it will
 read markedly better on the dark arena floor, and/or with a bolder `MPC.Air` tint at integration. Motion
-(the exaggerated swirl) is where air reads; static frames understate it. **Next: light, shadow.**
+(the exaggerated swirl) is where air reads; static frames understate it.
+
+### light (committed) — `docs/screenshots/act2/light-substance-lab.png`
+| socket | system | reads |
+|---|---|---|
+| projectile head | `NS_AuraFX_Lightsaber` | light bolt aura. |
+| impact burst | `N_LightBlast` | **strong + correct** — bold bright-white burst; the true light read. |
+| trail | `NS_SlashTrail_LightSaber` | blue-white saber trail; has a `Color` User var (tintable to gold). |
+| shell surface | `N_EnergyShieldStylized` | **hue MISMATCH** — renders **magenta** (Energy family's native tint), reads as arcane, not warm-white/gold light. |
+| zone fill | `N_EnergyWallStylized` | same magenta mismatch. |
+| heal motes | golden rays | light IS the heal element — golden rays/glints rising is the intended heal-mote; not yet placed. |
+
+**FINDING (light hue gap):** MegaMagic shields/walls expose **no color User param**, so the Energy shell/
+wall cannot be recoloured to gold via user params — only `N_LightBlast` (white) reads as light out of the
+box. Fixes for integration/refinement: (a) author a light-tinted **material instance** of the Energy
+shield/wall material (gold), or (b) source a white/gold shield elsewhere. The SlashTrail trail's `Color`
+User var CAN be set to `MPC.Light` (gold). Logged as the first real per-element gap. **Next: shadow.**
