@@ -184,6 +184,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay|Juice")
 	class USoundBase* CrunchTierMax = nullptr;
 
+	/** In-engine G1 gate. Console: `G1 <fixture> <speed>` plays the fixture and byte-diffs the
+	 *  renderer's OWN captured REPLAY| lines against docs/references/<fixture>.reference.txt at
+	 *  fight end, logging PASS or the first divergence. Instrument only: it reads the same emitted
+	 *  canonical lines and never alters them or the event order, so it cannot change what G1
+	 *  measures. Run inside PIE (the renderer only ticks/emits there). */
+	void StartGate(const FString& FixtureName, float Speed);
+
 private:
 	// --- loading ---
 	bool LoadReplay();
@@ -225,6 +232,12 @@ private:
 	// World location of an entity's head bone (label / sigil / damage-number anchor), or a
 	// sensible fallback above the sim position if the body isn't spawned.
 	FVector HeadWorld(const FReplayEntity& E) const;
+
+	// --- in-engine G1 gate capture (see StartGate). Active only during a gated run. ---
+	bool bGateActive = false;
+	FString GateName;          // reference base name, e.g. "frost-ember-seed1"
+	TArray<FString> GateLines; // canonical lines captured this run, compared at fight end
+	void FinishGate();         // byte-diff GateLines vs the reference file; log PASS / first divergence
 
 	// --- playback ---
 	void PlayReplayEvent(const FReplayEvent& Event);

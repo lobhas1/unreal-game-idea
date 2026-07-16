@@ -32,6 +32,8 @@
 #include "InputCoreTypes.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "EngineUtils.h"
+#include "HAL/IConsoleManager.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -42,6 +44,36 @@ namespace
 {
 	constexpr float kLabelSeconds = 1.2f;   // wall-clock lifetime of a floating number
 }
+
+// --- 'G1' console command: byte-diff the renderer's REPLAY| testimony against docs/references,
+// in-engine. Usage (in the PIE console): `G1 <fixture> <speed>`, e.g. `G1 frost-ember-seed1 4`.
+// Finds the ReplayPlayer in the running world and starts a gated run; the verdict (PASS / first
+// divergence) is logged at fight end by FinishGate. Instrument only - it never touches the emitted
+// lines or the event order. ---
+static void ReplayExecG1(const TArray<FString>& Args, UWorld* World)
+{
+	if (!World)
+	{
+		UE_LOG(LogReplay, Warning, TEXT("G1: no world (run inside PIE)."));
+		return;
+	}
+	AReplayPlayer* RP = nullptr;
+	for (TActorIterator<AReplayPlayer> It(World); It; ++It) { RP = *It; break; }
+	if (!RP)
+	{
+		UE_LOG(LogReplay, Warning, TEXT("G1: no ReplayPlayer in the world (start PIE first)."));
+		return;
+	}
+	const FString Fixture = (Args.Num() > 0) ? Args[0] : TEXT("frost-ember-seed1");
+	const float Speed = (Args.Num() > 1) ? FCString::Atof(*Args[1]) : 1.0f;
+	RP->StartGate(Fixture, Speed);
+}
+
+static FAutoConsoleCommandWithWorldAndArgs GReplayG1Cmd(
+	TEXT("G1"),
+	TEXT("G1 <fixture> <speed>: play a fixture and byte-diff the renderer's REPLAY| lines against "
+	     "docs/references/<fixture>.reference.txt; logs PASS or the first divergence. Run inside PIE."),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ReplayExecG1));
 
 AReplayPlayer::AReplayPlayer()
 {
@@ -762,6 +794,7 @@ void AReplayPlayer::PlayReplayEvent(const FReplayEvent& Event)
 	// THE LOG comes first and unconditionally: every consumed event emits its
 	// canonical projection line. Visuals are secondary and never gate the log.
 	EmitCanonical(Event);
+	if (bGateActive) { GateLines.Add(Event.Canonical); } // in-engine G1: capture the same emitted line
 	RenderEventVisual(Event);
 }
 
@@ -1318,6 +1351,8 @@ void AReplayPlayer::FinishFight()
 	bFinished = true;
 	UE_LOG(LogReplay, Display, TEXT("ReplayPlayer: fight end - winner=%s reason=%s"), *WinnerName, *EndReason);
 
+	if (bGateActive) { FinishGate(); } // in-engine G1: byte-diff the captured run vs the reference
+
 	// Winner banner is text: gated by bTextVisible (G3). The log line above is not.
 	if (bTextVisible)
 	{
@@ -1333,4 +1368,58 @@ void AReplayPlayer::FinishFight()
 				FString::Printf(TEXT("WINNER: %s (%s)"), *WinnerName, *EndReason));
 		}
 	}
+}
+
+void AReplayPlayer::StartGate(const FString& FixtureName, float Speed)
+{
+	// Begin a gated run: capture this playback's canonical lines, then compare at fight end.
+	// Cosmetic pacing only - SpeedMultiplier and the replay switch never change the log content.
+	GateName = FixtureName;
+	GateLines.Reset();
+	bGateActive = true;
+	SpeedMultiplier = (Speed > 0.f) ? Speed : 1.f;
+	const FString Path = FString::Printf(TEXT("Replays/%s.json"), *FixtureName);
+	UE_LOG(LogReplay, Display, TEXT("G1: start '%s' @ %gx -> %s"), *FixtureName, SpeedMultiplier, *Path);
+	LoadAndBuild(Path); // teardown + reload + rebuild + reset clock; playback restarts from t=0
+	if (!bLoaded)
+	{
+		bGateActive = false;
+		UE_LOG(LogReplay, Warning, TEXT("G1 FAIL: could not load fixture '%s'"), *Path);
+	}
+}
+
+void AReplayPlayer::FinishGate()
+{
+	bGateActive = false;
+
+	// The reference file is the canonical lines, LF-joined with a single trailing newline
+	// (docs/references/<name>.reference.txt). Read it and split into lines for the diff.
+	const FString RefPath = FPaths::Combine(FPaths::ProjectDir(), TEXT("docs/references"), GateName + TEXT(".reference.txt"));
+	FString RefRaw;
+	if (!FFileHelper::LoadFileToString(RefRaw, *RefPath))
+	{
+		UE_LOG(LogReplay, Warning, TEXT("G1 FAIL: %s - cannot read reference %s"), *GateName, *RefPath);
+		return;
+	}
+	TArray<FString> RefLines;
+	RefRaw.Replace(TEXT("\r\n"), TEXT("\n")).ParseIntoArray(RefLines, TEXT("\n"), /*CullEmpty=*/false);
+	if (RefLines.Num() > 0 && RefLines.Last().IsEmpty()) { RefLines.RemoveAt(RefLines.Num() - 1); } // drop trailing-newline tail
+
+	// First divergence wins (byte-identity means every line and the count match).
+	const int32 N = FMath::Max(GateLines.Num(), RefLines.Num());
+	for (int32 i = 0; i < N; ++i)
+	{
+		const FString G = GateLines.IsValidIndex(i) ? GateLines[i] : TEXT("<missing>");
+		const FString R = RefLines.IsValidIndex(i)  ? RefLines[i]  : TEXT("<missing>");
+		if (G != R)
+		{
+			UE_LOG(LogReplay, Warning, TEXT("G1 FAIL: %s @ %gx - first divergence at line %d of %d rendered / %d reference"),
+				*GateName, SpeedMultiplier, i + 1, GateLines.Num(), RefLines.Num());
+			UE_LOG(LogReplay, Warning, TEXT("  reference: %s"), *R);
+			UE_LOG(LogReplay, Warning, TEXT("  rendered:  %s"), *G);
+			return;
+		}
+	}
+	UE_LOG(LogReplay, Display, TEXT("G1 PASS: %s @ %gx - %d REPLAY| lines BYTE-IDENTICAL to reference"),
+		*GateName, SpeedMultiplier, GateLines.Num());
 }
