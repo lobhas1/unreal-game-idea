@@ -133,4 +133,18 @@ the per-element screenshots (captured with reactivation) are the record.
 | zone fill | `N_MagmaWall` | magma/rock wall. |
 | heal motes | — | rising dust/pebbles (placeholder). |
 
-Chunky flat-shaded rock silhouettes satisfy NO PERFECT PRIMITIVES natively. **Next: air, light, shadow.**
+Chunky flat-shaded rock silhouettes satisfy NO PERFECT PRIMITIVES natively.
+
+### air (committed) — `docs/screenshots/act2/air-substance-lab.png`
+| socket | system | reads |
+|---|---|---|
+| projectile head | `NS_AuraFX_Wind` | pale wind swirl (faint). |
+| impact burst | `NS_Hit_Wind` | wind gust. |
+| trail | `NS_SlashTrail_Wind` | wind streak (motion-dependent). |
+| shell surface | `N_WindShieldStylized` | pale translucent sphere with swirling wind streaks (Stylized variant preferred per chibi-bold) — reads as a wind shell. |
+| zone fill | `N_WindWall` | wind gust wall. |
+| heal motes | — | rising ribbons (placeholder). |
+
+**Air is the faintest read** — translucent pale-cyan wind washes out against the white lab floor; it will
+read markedly better on the dark arena floor, and/or with a bolder `MPC.Air` tint at integration. Motion
+(the exaggerated swirl) is where air reads; static frames understate it. **Next: light, shadow.**
