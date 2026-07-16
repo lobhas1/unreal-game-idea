@@ -193,3 +193,56 @@ Per new Step-C guidance, the archetypes were deepened and the front-view formali
 
 **STOP** — Step-C revision gate-green on the rebuilt binary. (Apparatus follow-up: the in-engine `G1`
 console command lands as its own task + commit.)
+
+## PAUSED AT STEP C — current archetype status + warden misfit (filed)
+
+Act one is **paused at step C** (not finished). Two runtime bugs were found and fixed after the stop
+(commit `8c740d5`, full/fast-G1 byte-identical), then this status was filed. Steps C and D must be
+**finished** — including the remap below — before act two's step C (arena integration) may run.
+
+### Playback fixes that landed (commit `8c740d5`)
+- **Casts were invisible.** The corpus models nearly every cast with a ~0 cast→effect window (see the
+  standing gotcha), so the old play-rate `Len·speed / max(Window, 0.05)` clamped every cast to the 12×
+  max — each clip finished in ~50 ms and froze on its last pose. Confirmed by a temporary single-node
+  diagnostic (`rate=12.00`, `playing=0`, frozen `pos`). Fix: floor the window at the clip length
+  (`W = max(Window, Len)`) ⇒ a ~0-window cast plays at **natural speed**; resume the looping idle once a
+  non-looping cast ends so the wizard breathes between casts. Post-fix diagnostic: `rate=1.00`, idle
+  looping, positions advancing.
+- **Showcase camera framed the distant dummy too**, pulling the view high/far. Fix: a single-caster
+  replay focuses the tracking + front cameras tight on the caster (blaze showcase camera→caster distance
+  872 uu, was ~2000); two-caster fights keep the ratified both-fighters framing.
+
+### Per-archetype status
+| archetype | delivery trigger | clips wired | reads correctly? |
+|---|---|---|---|
+| **THROW** | `Projectile`, window ≥ `kHitscanGap` | `Attack01Anim` (single) | wired + plays at natural speed. Offensive staff-point cast — **reads plausibly** (used by the frost-ember windowed casts). |
+| **SLAM** | `GroundAoE` (`ZoneSpawned`) | leap-slam composite `JumpUpAttackAnim`→`JumpAirAttackAnim`→`JumpEndAnim` | wired + composite plays (confirmed via single-node diag). A leap onto a ground zone — **reads plausibly** as a ground-AoE slam; leap-apex framing still to be visually confirmed. |
+| **CHANNEL** | `Self` (effect resolves on the caster) | `Attack02StartAnim` + N×`Attack02MaintainAnim` loop | wired + loops to fill the window. **Reads WRONG for shield/ward casts** — it is an *attack* channel pose. See misfit below. |
+| **SNAP** | `Projectile` window < `kHitscanGap`, or unresolved | `Attack03StartAnim` (single) | wired + plays. Quick offensive flick — **reads plausibly**. |
+
+Idle = `Idle01Anim` (looping, resumes between casts). Death = grey-out (no death montage yet).
+
+### Warden misfit — PRECISE
+Fixture `warden-vs-duelist-t2-seed1`. Caster 1 is `a-defensive-earth-warden`.
+- **`stone-aegis`** (casts at t=0.0 and t=9.0): its resolving effect is **`ShieldGranted` on the caster
+  itself** (+ `StatModified` self) ⇒ `ClassifyDeliveries` marks it **`Self`** ⇒ archetype **CHANNEL** ⇒
+  it plays the **`Attack02Start` + `Attack02Maintain`** loop. So a **defensive stone aegis reads as an
+  aggressive attack-channel** (staff thrust/hold) — the misfit. This is the clearest wrong read in the
+  corpus.
+- **Remap (evaluated, recommended):** route **shield/ward casts** (delivery `Self` whose resolving
+  effect is `ShieldGranted`) to **`DefendStartAnim` + `DefendMaintainAnim`** — the wizard's defend clips,
+  which read as a raised-guard/ward and fit a shield grant. Both clips exist on the shared skeleton
+  (`Content/BattleWizardPBR/Animations/DefendStartAnim`, `DefendMaintainAnim`, plus `DefendHitAnim`).
+  This needs the CHANNEL branch to distinguish shield-grant Self-casts (→ Defend) from heal/buff
+  Self-casts (→ Attack02 channel, or a heal-specific clip later).
+- **Secondary note (not the shield remap):** the duelist's **`wind-step`** (self `Displaced`/`StatModified`)
+  also classifies `Self` ⇒ CHANNEL ⇒ `Attack02` loop. A hit-and-run dash reading as an attack-channel is
+  also off, but `DefendMaintain` is *not* its fix — a dash/dodge/`Jump*` mapping would be, which is a
+  separate step-C/D refinement out of scope for the shield remap.
+
+### What remains for steps C & D (before any act-two integration)
+1. Implement the shield/ward → Defend remap (split the CHANNEL branch by resolving-effect kind).
+2. Reconsider self-mobility (`wind-step`) mapping (dash vs channel).
+3. Step D socket-origin pass on the wizard rig (throws from `hand_r`, slam feet, channel chest/hands),
+   visually confirmed; and visually confirm the SLAM leap-apex and THROW/SNAP reads.
+4. Re-run the gate at the appropriate cadence; full G1 + screenshots at the step-E stop.
