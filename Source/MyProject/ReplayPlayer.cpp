@@ -746,11 +746,15 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 	if (!SMC) { return; }
 
 	const double Window = Cast.EffectT - Cast.T;
+	// Archetype is chosen by DELIVERY (the spell's nature); the window drives play-rate (below)
+	// and only distinguishes a travelling throw from an instant-hitscan flick. Delivery-first so
+	// slam/channel/throw actually differentiate - the corpus models most casts with a ~0 window,
+	// which a window-first rule would collapse to SNAP for everything.
 	UAnimSequence* Anim =
-		(Window < kHitscanGap)                        ? SnapAnim  :   // near-zero window: a quick flick
-		(Cast.Delivery == EReplayDelivery::GroundAoE) ? SlamAnim  :   // zone: leap-and-land slam
-		(Cast.Delivery == EReplayDelivery::Self)      ? ChannelAnim : // self: sustained channel
-		                                                 ThrowAnim;   // projectile / default: throw
+		(Cast.Delivery == EReplayDelivery::GroundAoE) ? SlamAnim    : // zone: area slam
+		(Cast.Delivery == EReplayDelivery::Self)      ? ChannelAnim : // self / heal / shield: channel
+		(Cast.Delivery == EReplayDelivery::Projectile && Window >= kHitscanGap) ? ThrowAnim : // travelling throw
+		                                                SnapAnim;    // instant hitscan projectile / unresolved: quick flick
 	if (!Anim) { return; }
 
 	const float Len = Anim->GetPlayLength();
