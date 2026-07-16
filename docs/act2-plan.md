@@ -72,3 +72,33 @@ motion (lick vs tumble vs ribbon vs tendril) is the intended differentiator; fin
 A (this doc) → B substance sets on a test map (per element/pair, MPC + User params, silhouette
 noise) → C integration via the two-level element law from the act-one sockets + full G1 → D coverage
 + per-element screenshots → E report + twin-risk note.
+
+## Step B — substance-set prototyping (IN PROGRESS)
+
+**Test map:** `/Game/TestMaps/SubstanceLab` (blank level created by the human; populated + captured via
+MCP). Contents: a `WizardSM` **scale reference** at origin (~175 uu), a floor cube, a directional light
++ sky light, and each element's substance set laid out in a row (one actor per M2-D socket). Captured
+with MCP `CaptureViewport` (renders editor-placed content correctly — no live-screen grabs). **This map
+is a prototype sandbox only; nothing here integrates into the arena (act-two step C is gated on act-one
+C & D).**
+
+**Tinting finding:** the **MegaMagic** systems ship **per-element** (`N_FlameShield`, `N_AquaShield`, …)
+and expose **no color User param** — so each element uses its OWN native system rather than re-tinting a
+generic one. The **SlashTrail** systems DO expose a `Color` User var (tintable from the MPC), but also
+ship per-element. Net: the MPC palette is the *reference/source of truth* for each element's primary/
+secondary (`<Element>_Primary`/`_Secondary`); systems are selected per-element and already carry the
+right hue, with the `Color` User var set from the MPC where a generic system is reused.
+
+### fire (committed) — screenshot `docs/screenshots/act2/fire-substance-lab.png`
+| socket | system | reads |
+|---|---|---|
+| projectile head | `NS_AuraFX_Fire` | orange flame aura — reads as fire; a touch wispy for a "ball of fire" (refine: chunkier core, e.g. small `N_FlameBlast` loop or `SM_Meteor`+flame). |
+| impact burst | `N_FlameBlast` | bold bright yellow-orange burst — strong chibi-bold read. |
+| trail | `NS_SlashTrail_Fire` | motion-dependent (static capture understates it); `Color` User var present. |
+| shell surface | `N_FlameShield` | translucent sphere wrapped in orange flame bands — reads as a fire shell. Sphere is near-primitive; flame bands supply the required silhouette irregularity (NO PERFECT PRIMITIVES). |
+| zone fill | `N_RingOfFlames` | ground ring of flames. |
+| heal motes | — | N/A (fire is not a heal element); ember-rise placeholder only. |
+
+Scale vs the wizard reads acceptable; a slight scale-up would push boldness. Silhouette noise comes from
+each system's native modules (flicker/turbulence), satisfying the no-perfect-primitives clause. **Next:
+water, then earth, air, light, shadow — committing per element or pair.**
