@@ -265,6 +265,9 @@ private:
 	void UpdateFrontCamera(float DeltaSeconds);    // frames both fighters head-on, low pitch, closer
 	EReplayCameraMode AppliedCameraMode = EReplayCameraMode::LawTracking; // last mode pushed to the view
 	bool bCameraViewInit = false;                  // has the player view target been set yet
+	// Single-caster replay (showcase: one wizard casting at a passive dummy) => the camera focuses
+	// tight on this caster so its cast animation is legible; 0 for a fight (both cast) => frame both.
+	int32 PrimaryCasterId = 0;
 	static constexpr float kCamPitch = -55.0f;
 	static constexpr float kCamYaw = -55.0f;
 	UStaticMesh* CubeMesh = nullptr;

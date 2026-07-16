@@ -16,6 +16,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimComposite.h"
+#include "Animation/AnimSingleNodeInstance.h"
 #include "Animation/Skeleton.h"
 #include "Animation/AnimationAsset.h"
 #include "Camera/CameraActor.h"
@@ -298,6 +299,23 @@ void AReplayPlayer::LoadAndBuild(const FString& NewReplayPath)
 	UE_LOG(LogReplay, Display, TEXT("ReplayPlayer: loaded '%s' (%d events, %d entities, duration=%f, winner=%s, endReason=%s)"),
 		*ReplayPath, Events.Num(), Entities.Num(), DurationSeconds, *WinnerName, *EndReason);
 
+	// Single-caster detection: a showcase is one wizard casting at a passive dummy; a fight has both
+	// entities casting. For a single caster the camera focuses tight on it (so the cast animation is
+	// legible while browsing showcases); a fight keeps the ratified both-fighters framing. Plain Play
+	// loads a fight (frost-ember) => two casters => PrimaryCasterId 0 => ratified view unchanged.
+	PrimaryCasterId = 0;
+	{
+		TSet<int32> Casters;
+		for (const FReplayEvent& Ev : Events)
+		{
+			if (Ev.Type == TEXT("CastStarted") && Ev.Payload.IsValid() && Ev.Payload->HasField(TEXT("caster")))
+			{
+				Casters.Add((int32)Ev.Payload->GetNumberField(TEXT("caster")));
+			}
+		}
+		if (Casters.Num() == 1 && Entities.Num() > 1) { PrimaryCasterId = *Casters.CreateConstIterator(); }
+	}
+
 	BuildScaffold();
 
 	// Browser label + index resolved from the path ("beacon.replay.json" -> "beacon").
@@ -543,21 +561,32 @@ void AReplayPlayer::UpdateTrackingCamera(float DeltaSeconds)
 {
 	if (!TrackingCamera.IsValid() || Entities.Num() == 0) { return; }
 
-	// Frame both fighters: midpoint + spread of their current world positions.
-	FVector Mid = FVector::ZeroVector;
-	FVector Lo(TNumericLimits<float>::Max()), Hi(TNumericLimits<float>::Lowest());
-	for (const FReplayEntity& E : Entities)
+	// Focus point + distance. Single-caster replay (showcase) => frame TIGHT on the caster so its cast
+	// animation is legible; fight (both cast) => ratified both-fighters framing (midpoint + spread).
+	FVector Mid;
+	float R;
+	if (PrimaryCasterId != 0)
 	{
-		const FVector W = SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f);
-		Mid += W;
-		Lo = Lo.ComponentMin(W);
-		Hi = Hi.ComponentMax(W);
+		const FReplayEntity* C = FindEntity(PrimaryCasterId);
+		Mid = SimToWorld(C ? C->CurrentSim : Entities[0].CurrentSim) + FVector(0, 0, 110.f);
+		R = 780.f; // close enough to read a humanoid caster mid-cast
 	}
-	Mid /= (float)Entities.Num();
-
-	// Distance so both fit with comfortable margin; pitched down ~55 deg, three-quarter yaw.
-	const float Spread = FVector::Dist(Lo, Hi);
-	const float R = FMath::Clamp(Spread * 1.6f + 700.f, 800.f, 5000.f);
+	else
+	{
+		Mid = FVector::ZeroVector;
+		FVector Lo(TNumericLimits<float>::Max()), Hi(TNumericLimits<float>::Lowest());
+		for (const FReplayEntity& E : Entities)
+		{
+			const FVector W = SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f);
+			Mid += W;
+			Lo = Lo.ComponentMin(W);
+			Hi = Hi.ComponentMax(W);
+		}
+		Mid /= (float)Entities.Num();
+		const float Spread = FVector::Dist(Lo, Hi);
+		R = FMath::Clamp(Spread * 1.6f + 700.f, 800.f, 5000.f);
+	}
+	// Pitched down ~55 deg, three-quarter yaw.
 	const FRotator Rot(kCamPitch, kCamYaw, 0.f);
 	const FVector DesiredLoc = Mid - Rot.Vector() * R;
 
@@ -578,18 +607,22 @@ void AReplayPlayer::UpdateFrontCamera(float DeltaSeconds)
 	// presentational - frames actors, reads no state, emits nothing (G1 untouched).
 	if (!FrontCamera.IsValid() || Entities.Num() == 0) { return; }
 
-	FVector Mid = FVector::ZeroVector;
-	FVector Lo(TNumericLimits<float>::Max()), Hi(TNumericLimits<float>::Lowest());
-	for (const FReplayEntity& E : Entities)
+	// Focus point: tight on the caster for a single-caster showcase, else the fighters' midpoint.
+	FVector Mid;
+	if (PrimaryCasterId != 0)
 	{
-		const FVector W = SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f);
-		Mid += W;
-		Lo = Lo.ComponentMin(W);
-		Hi = Hi.ComponentMax(W);
+		const FReplayEntity* C = FindEntity(PrimaryCasterId);
+		Mid = SimToWorld(C ? C->CurrentSim : Entities[0].CurrentSim) + FVector(0, 0, 110.f);
 	}
-	Mid /= (float)Entities.Num();
+	else
+	{
+		Mid = FVector::ZeroVector;
+		for (const FReplayEntity& E : Entities) { Mid += SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f); }
+		Mid /= (float)Entities.Num();
+	}
 
-	// Perpendicular to the fighter-separation axis (XY), so the camera looks across the matchup.
+	// Perpendicular to the caster->target axis (XY), so the camera looks across the matchup (caster
+	// reads from the side/front, not from behind).
 	FVector Sep = (Entities.Num() >= 2)
 		? (SimToWorld(Entities[1].CurrentSim) - SimToWorld(Entities[0].CurrentSim))
 		: FVector(1.f, 0.f, 0.f);
@@ -601,8 +634,20 @@ void AReplayPlayer::UpdateFrontCamera(float DeltaSeconds)
 	const FVector LawOut = -FRotator(kCamPitch, kCamYaw, 0.f).Vector(); // mid -> law-camera direction
 	if (FVector::DotProduct(Perp, LawOut) < 0.f) { Perp = -Perp; }
 
-	const float Spread = FVector::Dist(Lo, Hi);
-	const float R = FMath::Clamp(Spread * 1.15f + 500.f, 600.f, 3500.f);
+	// Distance: tight on a single caster; spread-based for a fight.
+	float R;
+	if (PrimaryCasterId != 0) { R = 620.f; }
+	else
+	{
+		FVector Lo(TNumericLimits<float>::Max()), Hi(TNumericLimits<float>::Lowest());
+		for (const FReplayEntity& E : Entities)
+		{
+			const FVector W = SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f);
+			Lo = Lo.ComponentMin(W);
+			Hi = Hi.ComponentMax(W);
+		}
+		R = FMath::Clamp(FVector::Dist(Lo, Hi) * 1.15f + 500.f, 600.f, 3500.f);
+	}
 	const FVector DesiredLoc = Mid + Perp * R + FVector(0.f, 0.f, 160.f);
 	const FRotator Rot = (Mid - DesiredLoc).Rotation();
 
@@ -645,6 +690,27 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 			if (!E.Body.IsValid()) { continue; }
 			E.CurrentSim = FMath::VInterpTo(E.CurrentSim, E.TargetSim, DeltaSeconds, 8.f);
 			E.Body->SetActorLocation(SimToWorld(E.CurrentSim)); // mannequin feet on the floor
+		}
+	}
+
+	// Return each caster to its looping idle once its (non-looping) cast archetype has finished, so the
+	// wizard breathes between casts instead of freezing on the last cast pose. Idle loops (IsPlaying
+	// stays true), casts don't - so a finished cast is exactly !IsPlaying with a non-idle asset. Reset
+	// the play-rate to 1 (the cast left it stretched). Presentation only; dead bodies keep their pose.
+	if (IdleAnim)
+	{
+		for (FReplayEntity& E : Entities)
+		{
+			if (E.bDead || !E.Body.IsValid()) { continue; }
+			if (USkeletalMeshComponent* S = E.Body->GetSkeletalMeshComponent())
+			{
+				UAnimSingleNodeInstance* SN = S->GetSingleNodeInstance();
+				if (SN && !SN->IsPlaying() && SN->GetAnimationAsset() != IdleAnim)
+				{
+					S->PlayAnimation(IdleAnim, true);
+					S->SetPlayRate(1.f);
+				}
+			}
 		}
 	}
 
@@ -937,11 +1003,15 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 
 	if (!Anim || Len <= 0.f) { return; }
 
-	const double W = FMath::Max(Window, 0.05);        // floor keeps the SNAP rate finite
-	// Window is sim-seconds; wall-clock window = W / SpeedMultiplier, so scale the rate by speed to
-	// keep the fit exact at any playback speed. The loop-sized channel composite has Len ~= window,
-	// so its rate lands near natural speed; short windows push the rate up to fit (play-rate law).
-	const float Rate = FMath::Clamp((float)((double)Len * FMath::Max(SpeedMultiplier, 0.01f) / W), 0.1f, 12.f);
+	// Visibility floor: the corpus models most casts with a ~0 cast->effect window, so fitting the
+	// play-rate STRICTLY to the window plays every cast in a few milliseconds - invisible. Floor the
+	// window at the clip's own length so a ~0-window cast plays at NATURAL speed (rate == replay speed),
+	// while a genuinely long window still stretches the clip to fill it (rate < speed). Cosmetic only:
+	// the effect event already fired on its own SimTime, so a visible cast never delays or drives it.
+	const double W = FMath::Max(Window, (double)Len);
+	// Window is sim-seconds; wall-clock window = W / SpeedMultiplier, so scale the rate by speed to keep
+	// the fit at any playback speed. With W >= Len the rate is <= replay speed (==speed at a ~0 window).
+	const float Rate = FMath::Clamp((float)((double)Len * FMath::Max(SpeedMultiplier, 0.01f) / W), 0.1f, 8.f);
 	SMC->PlayAnimation(Anim, false); // single-node, non-looping; holds last pose then idle resumes on next cast
 	SMC->SetPlayRate(Rate);
 }
