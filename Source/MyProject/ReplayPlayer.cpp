@@ -15,6 +15,8 @@
 #include "Animation/SkeletalMeshActor.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/AnimComposite.h"
+#include "Animation/Skeleton.h"
 #include "Animation/AnimationAsset.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
@@ -470,11 +472,21 @@ void AReplayPlayer::BuildScaffold()
 			TCam->SetActorLabel(TEXT("ReplayTrackingCamera"));
 			TrackingCamera = TCam;
 		}
+		if (ACameraActor* FCam = World->SpawnActor<ACameraActor>(Above, FRotator(-12.f, 0.f, 0.f)))
+		{
+			FCam->SetActorLabel(TEXT("ReplayFrontCamera")); // head-on inspection view (reframed each Tick)
+			FrontCamera = FCam;
+		}
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
-			ACameraActor* View = bDebugOverheadCamera ? OverheadCamera.Get() : TrackingCamera.Get();
+			ACameraActor* View =
+				(CameraMode == EReplayCameraMode::OverheadDebug)   ? OverheadCamera.Get() :
+				(CameraMode == EReplayCameraMode::FrontInspection) ? FrontCamera.Get()    :
+				                                                     TrackingCamera.Get();
 			if (View) { PC->SetViewTarget(View); }
-			if (bDebugOverheadCamera) { CameraBaseLoc = Above; }
+			AppliedCameraMode = CameraMode;
+			bCameraViewInit = true;
+			if (CameraMode == EReplayCameraMode::OverheadDebug) { CameraBaseLoc = Above; }
 		}
 		if (ADirectionalLight* Sun = World->SpawnActor<ADirectionalLight>(
 				FVector(0, 0, 1000.f), FRotator(-60.f, 30.f, 0.f)))
@@ -491,7 +503,8 @@ void AReplayPlayer::BuildScaffold()
 		bScaffoldInit = true;
 	}
 
-	UpdateTrackingCamera(0.f); // snap-frame to the (re)built capsules before first draw
+	UpdateFrontCamera(0.f);    // pre-frame the inspection view so a live mode-flip is instant
+	UpdateTrackingCamera(0.f); // snap-frame the canonical view last (seeds CameraBaseLoc for the default mode)
 }
 
 void AReplayPlayer::UpdateTrackingCamera(float DeltaSeconds)
@@ -523,6 +536,49 @@ void AReplayPlayer::UpdateTrackingCamera(float DeltaSeconds)
 		: FMath::VInterpTo(CameraBaseLoc, DesiredLoc, DeltaSeconds, 3.0f);
 	TrackingCamera->SetActorLocationAndRotation(NewLoc, Rot);
 	CameraBaseLoc = NewLoc; // screen shake offsets around this base
+}
+
+void AReplayPlayer::UpdateFrontCamera(float DeltaSeconds)
+{
+	// INSPECTION CAMERA MODE (FrontInspection): a head-on animation view. Looks at the fighters'
+	// midpoint along the perpendicular to the line between them, so both read side-by-side; low
+	// pitch and closer than the law camera so the cast pose is legible for animation work. Purely
+	// presentational - frames actors, reads no state, emits nothing (G1 untouched).
+	if (!FrontCamera.IsValid() || Entities.Num() == 0) { return; }
+
+	FVector Mid = FVector::ZeroVector;
+	FVector Lo(TNumericLimits<float>::Max()), Hi(TNumericLimits<float>::Lowest());
+	for (const FReplayEntity& E : Entities)
+	{
+		const FVector W = SimToWorld(E.CurrentSim) + FVector(0, 0, 100.f);
+		Mid += W;
+		Lo = Lo.ComponentMin(W);
+		Hi = Hi.ComponentMax(W);
+	}
+	Mid /= (float)Entities.Num();
+
+	// Perpendicular to the fighter-separation axis (XY), so the camera looks across the matchup.
+	FVector Sep = (Entities.Num() >= 2)
+		? (SimToWorld(Entities[1].CurrentSim) - SimToWorld(Entities[0].CurrentSim))
+		: FVector(1.f, 0.f, 0.f);
+	Sep.Z = 0.f;
+	if (Sep.SizeSquared() < 1.f) { Sep = FVector(1.f, 0.f, 0.f); }
+	const FVector AxisN = Sep.GetSafeNormal();
+	FVector Perp(-AxisN.Y, AxisN.X, 0.f);
+	// Keep the same audience side as the law camera (so A stays left, B right).
+	const FVector LawOut = -FRotator(kCamPitch, kCamYaw, 0.f).Vector(); // mid -> law-camera direction
+	if (FVector::DotProduct(Perp, LawOut) < 0.f) { Perp = -Perp; }
+
+	const float Spread = FVector::Dist(Lo, Hi);
+	const float R = FMath::Clamp(Spread * 1.15f + 500.f, 600.f, 3500.f);
+	const FVector DesiredLoc = Mid + Perp * R + FVector(0.f, 0.f, 160.f);
+	const FRotator Rot = (Mid - DesiredLoc).Rotation();
+
+	const FVector NewLoc = (DeltaSeconds <= 0.f)
+		? DesiredLoc
+		: FMath::VInterpTo(CameraBaseLoc, DesiredLoc, DeltaSeconds, 3.0f);
+	FrontCamera->SetActorLocationAndRotation(NewLoc, Rot);
+	CameraBaseLoc = NewLoc; // shake base while this is the active view
 }
 
 void AReplayPlayer::Tick(float DeltaSeconds)
@@ -560,13 +616,31 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 		}
 	}
 
-	// Camera law: the three-quarter tracking view is canonical; UpdateTrackingCamera
-	// frames both fighters and refreshes CameraBaseLoc. Overhead is the debug fallback.
-	if (!bDebugOverheadCamera)
+	// Camera law: LawTracking (canonical three-quarter) reframes both fighters each Tick;
+	// FrontInspection is the head-on animation view; OverheadDebug is static. The human may flip
+	// CameraMode live in-editor, so we retarget the player view whenever it changes. No mode
+	// touches the event loop or the REPLAY| log - G1 holds in every mode.
+	if (CameraMode == EReplayCameraMode::LawTracking)          { UpdateTrackingCamera(DeltaSeconds); }
+	else if (CameraMode == EReplayCameraMode::FrontInspection) { UpdateFrontCamera(DeltaSeconds); }
+
+	ACameraActor* ActiveCam =
+		(CameraMode == EReplayCameraMode::OverheadDebug)   ? OverheadCamera.Get() :
+		(CameraMode == EReplayCameraMode::FrontInspection) ? FrontCamera.Get()    :
+		                                                     TrackingCamera.Get();
+
+	if (!bCameraViewInit || CameraMode != AppliedCameraMode)
 	{
-		UpdateTrackingCamera(DeltaSeconds);
+		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+		{
+			if (ActiveCam) { PC->SetViewTarget(ActiveCam); }
+		}
+		if (CameraMode == EReplayCameraMode::OverheadDebug && OverheadCamera.IsValid())
+		{
+			CameraBaseLoc = OverheadCamera->GetActorLocation(); // static view: seed the shake base
+		}
+		AppliedCameraMode = CameraMode;
+		bCameraViewInit = true;
 	}
-	ACameraActor* ActiveCam = bDebugOverheadCamera ? OverheadCamera.Get() : TrackingCamera.Get();
 
 	// Screen shake: offset the active camera around its base (runs during hit-stop too so
 	// the impact reads). Amplitude decays to rest; only damage sets it (via TriggerJuice).
@@ -746,21 +820,94 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 	if (!SMC) { return; }
 
 	const double Window = Cast.EffectT - Cast.T;
-	// Archetype is chosen by DELIVERY (the spell's nature); the window drives play-rate (below)
-	// and only distinguishes a travelling throw from an instant-hitscan flick. Delivery-first so
-	// slam/channel/throw actually differentiate - the corpus models most casts with a ~0 window,
-	// which a window-first rule would collapse to SNAP for everything.
-	UAnimSequence* Anim =
-		(Cast.Delivery == EReplayDelivery::GroundAoE) ? SlamAnim    : // zone: area slam
-		(Cast.Delivery == EReplayDelivery::Self)      ? ChannelAnim : // self / heal / shield: channel
-		(Cast.Delivery == EReplayDelivery::Projectile && Window >= kHitscanGap) ? ThrowAnim : // travelling throw
-		                                                SnapAnim;    // instant hitscan projectile / unresolved: quick flick
-	if (!Anim) { return; }
+	USkeleton* Skel = BodyMesh ? BodyMesh->GetSkeleton() : nullptr;
 
-	const float Len = Anim->GetPlayLength();
+	// Append a sequence (optionally looped N times) onto a runtime composite timeline, so
+	// single-node playback can perform Start->loop->End as one clip. Returns the running length.
+	auto AddSeg = [](UAnimComposite* C, float& Cursor, UAnimSequence* S, int32 Loops)
+	{
+		if (!C || !S) { return; }
+		FAnimSegment Seg;
+		Seg.SetAnimReference(S, /*bInitialize=*/true); // AnimStartTime=0, AnimEndTime=len, rate=1, loop=1
+		Seg.LoopingCount = FMath::Max(Loops, 1);
+		Seg.StartPos = Cursor;
+		Cursor += Seg.GetLength();
+		C->AnimationTrack.AnimSegments.Add(Seg);
+	};
+
+	// Archetype is chosen by DELIVERY (the spell's nature); the event-given cast->effect window
+	// drives the play-rate (short windows) or the Maintain loop count (long channels). Delivery-first
+	// so slam/channel/throw actually differentiate - the corpus models most casts with a ~0 window,
+	// which a window-first rule would collapse to SNAP for everything.
+	UAnimSequenceBase* Anim = nullptr; // sequence or runtime composite to play
+	float Len = 0.f;                   // its timeline length (composite: accumulated; sequence: play length)
+
+	if (Cast.Delivery == EReplayDelivery::GroundAoE)
+	{
+		// SLAM = leap-slam composite (chibi-bold): JumpUpAttack -> JumpAirAttack -> JumpEnd.
+		UAnimSequence* Up  = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/JumpUpAttackAnim.JumpUpAttackAnim"));
+		UAnimSequence* Air = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/JumpAirAttackAnim.JumpAirAttackAnim"));
+		UAnimSequence* End = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/JumpEndAnim.JumpEndAnim"));
+		if (Skel && (Up || Air || End))
+		{
+			UAnimComposite* C = NewObject<UAnimComposite>(this);
+			C->SetSkeleton(Skel);
+			float Cursor = 0.f;
+			AddSeg(C, Cursor, Up, 1);
+			AddSeg(C, Cursor, Air, 1);
+			AddSeg(C, Cursor, End, 1);
+			if (C->AnimationTrack.AnimSegments.Num() > 0)
+			{
+				C->SetCompositeLength(Cursor);
+				Anim = C; Len = Cursor;
+			}
+		}
+		if (!Anim && SlamAnim) { Anim = SlamAnim; Len = SlamAnim->GetPlayLength(); } // single-clip fallback
+	}
+	else if (Cast.Delivery == EReplayDelivery::Self)
+	{
+		// CHANNEL = Attack02 Start + looped Attack02 Maintain, sized to fill the cast->effect window.
+		// Looping is the lawful fit for LONG windows (natural-speed Maintain repeats); SHORT windows
+		// get no loops and the Start clip rate-stretches to fit (below).
+		UAnimSequence* Start    = ChannelAnim; // Attack02StartAnim (loaded in BeginPlay)
+		UAnimSequence* Maintain = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Attack02MaintainAnim.Attack02MaintainAnim"));
+		if (Skel && Start)
+		{
+			const float StartLen    = Start->GetPlayLength();
+			const float MaintainLen = Maintain ? Maintain->GetPlayLength() : 0.f;
+			int32 Loops = 0;
+			if (Maintain && MaintainLen > KINDA_SMALL_NUMBER && (double)StartLen < Window)
+			{
+				Loops = FMath::Clamp(FMath::RoundToInt(((float)Window - StartLen) / MaintainLen), 0, 64);
+			}
+			UAnimComposite* C = NewObject<UAnimComposite>(this);
+			C->SetSkeleton(Skel);
+			float Cursor = 0.f;
+			AddSeg(C, Cursor, Start, 1);
+			if (Loops > 0) { AddSeg(C, Cursor, Maintain, Loops); }
+			if (C->AnimationTrack.AnimSegments.Num() > 0)
+			{
+				C->SetCompositeLength(Cursor);
+				Anim = C; Len = Cursor;
+			}
+		}
+		if (!Anim && ChannelAnim) { Anim = ChannelAnim; Len = ChannelAnim->GetPlayLength(); }
+	}
+	else if (Cast.Delivery == EReplayDelivery::Projectile && Window >= kHitscanGap)
+	{
+		if (ThrowAnim) { Anim = ThrowAnim; Len = ThrowAnim->GetPlayLength(); } // travelling throw
+	}
+	else if (SnapAnim)
+	{
+		Anim = SnapAnim; Len = SnapAnim->GetPlayLength(); // instant hitscan projectile / unresolved: quick flick
+	}
+
+	if (!Anim || Len <= 0.f) { return; }
+
 	const double W = FMath::Max(Window, 0.05);        // floor keeps the SNAP rate finite
-	// Window is sim-seconds; wall-clock window = W / SpeedMultiplier, so scale the rate by speed
-	// to keep the fit exact at any playback speed.
+	// Window is sim-seconds; wall-clock window = W / SpeedMultiplier, so scale the rate by speed to
+	// keep the fit exact at any playback speed. The loop-sized channel composite has Len ~= window,
+	// so its rate lands near natural speed; short windows push the rate up to fit (play-rate law).
 	const float Rate = FMath::Clamp((float)((double)Len * FMath::Max(SpeedMultiplier, 0.01f) / W), 0.1f, 12.f);
 	SMC->PlayAnimation(Anim, false); // single-node, non-looping; holds last pose then idle resumes on next cast
 	SMC->SetPlayRate(Rate);

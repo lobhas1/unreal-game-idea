@@ -59,16 +59,18 @@ casters.)
 
 ## Archetype → animation mapping (verb + delivery → wizard montage)
 
-| archetype | triggers (verb / delivery) | wizard anim | why / window |
+| archetype | triggers (verb / delivery) | exact wizard clip(s) | structure / fit |
 |---|---|---|---|
-| **THROW** | targeted damage, `projectile`/`targetUnit` | `Attack01Anim` | staff-point forward cast; play-rate = len / (effect.t − cast.t) so the release lands on the effect event; projectile head spawns at `hand_r`. |
-| **SLAM** | `groundAoE` / `spawnZone` | `Attack04Anim` | grounded area attack; fit to cast→`ZoneSpawned`; foot dust at the feet, decal at the event centre (Law 2). |
-| **CHANNEL** | `heal`, `shield`, self-buffs (`self` delivery) | `Attack02StartAnim` | the start of a maintained channel; stretched across the cast→effect window; emit from chest. |
-| **SNAP** | near-zero cast windows (effect.t − cast.t < ~kHitscanGap) | `Attack03StartAnim` | a quick attack start, play-rate pushed high to fit the near-instant window; from `hand_r`. |
+| **THROW** | targeted damage, travelling `projectile` (window ≥ `kHitscanGap`) | `Attack01Anim` (single) | staff-point forward cast; play-rate = len × speed / window so the release lands on the effect event; projectile head spawns at `hand_r`. |
+| **SLAM** | `groundAoE` / `spawnZone` (`GroundAoE` delivery) | **composite:** `JumpUpAttackAnim` → `JumpAirAttackAnim` → `JumpEndAnim` | leap-slam reads chibi-bold — a runtime `UAnimComposite` concatenates the three on one timeline; whole composite play-rate-fit to cast→`ZoneSpawned`; foot dust at the feet, decal at the event centre (Law 2). Single-clip fallback `Attack04Anim` if a clip fails to load. |
+| **CHANNEL** | `heal`, `shield`, self-buffs (`Self` delivery) | **composite:** `Attack02StartAnim` + looped `Attack02MaintainAnim` | play Start once, then loop Maintain `round((window − startLen)/maintainLen)` times to fill the cast→effect window (looping is the lawful fit for LONG windows — composite length ≈ window ⇒ rate ≈ natural). SHORT windows get zero loops and the Start clip rate-stretches to fit. Fallback: Start alone. |
+| **SNAP** | instant/hitscan `projectile` (window < `kHitscanGap`) or unresolved | `Attack03StartAnim` (single) | a quick attack start, play-rate pushed high to fit the near-instant window; from `hand_r`. |
 
 Idle stance = `Idle01Anim`. Death keeps the grey-out (a `DieAnim` montage is a later refinement).
-Mapping is by clip name + role; refined after visual review at Step E. Start/Maintain montage
-splits are collapsed to the Start clip for phase 1 (single-clip play-rate fit).
+Play-rate law is unchanged (`len × speed / window`); for the composites `len` is the accumulated
+composite timeline length. Composites are built at runtime in `PlayCastArchetype` via
+`NewObject<UAnimComposite>` + `FAnimSegment`s (`SetAnimReference`/`LoopingCount`/`StartPos`) +
+`SetCompositeLength`, played through single-node `PlayAnimation` — no authored montage assets.
 
 **Play-rate law (all archetypes):** `PlayRate = AnimSequenceLength / max(window, epsilon)`, where
 `window` is the event-given cast→effect (or cast→zone-spawn) gap in sim seconds. The montage is
@@ -89,6 +91,23 @@ material instance (A = warm, B = cool) so they stay distinguishable. Name labels
 damage-number origins re-anchor from the old cylinder-top offset to the `head` bone. Death grey-out
 (the existing killed-path material tint + slump) stays, optionally with a Death_* montage.
 **G1 re-check on frost-ember (1x and 4x) after the swap — byte-identical required.**
+
+## Inspection camera mode (Step C revision)
+
+Formalized the front-view need as an **INSPECTION CAMERA MODE**: `CameraMode`, an `EReplayCameraMode`
+`UPROPERTY` on the ReplayPlayer with three values —
+
+- **`LawTracking`** *(default)* — the canonical three-quarter tracking view. **This is the committed
+  level default**, so a plain Play is always the ratified experience.
+- **`FrontInspection`** — a head-on animation view: looks across the matchup along the perpendicular
+  to the fighter-separation axis, low pitch, closer than the law camera, so a cast pose is legible.
+  This is the mode used to capture the Step-E archetype screenshots.
+- **`OverheadDebug`** — the retired straight-down debug view (replaces the old `bDebugOverheadCamera`).
+
+The human flips `CameraMode` freely in-editor for animation work (`Tick` retargets the player view
+live when it changes); the placed actor stays on `LawTracking` and no override is saved. Presentation-
+only: the mode selects a camera and nothing else — the event loop and the `REPLAY|` echo are untouched,
+so G1 byte-identity holds in every mode.
 
 ## Gates
 
@@ -132,5 +151,45 @@ floor). Render confirmed in live PIE by the human.
   screen-grab of the real game view was used and each was verified as a genuine editor render (both
   wizards visible, tinted apart, mid-cast with element FX + the browser label).
 
-**STOP** — phase one complete on the wizard body; both fixtures gate green, four archetype
-screenshots filed. Phase two (substance/beauty) Step B unlocks after this stop is audited.
+**(Prior build STOP)** — the above (delivery-first single-clip archetypes) gated green: both
+fixtures byte-identical, four screenshots filed from the default camera.
+
+### Step-C revision (leap-slam + looped channel + inspection camera) — pending rebuild + re-verify
+
+Per new Step-C guidance, the archetypes were deepened and the front-view formalized (source changed,
+**not yet gate-verified on this build**):
+
+- **SLAM → leap-slam composite** (`JumpUpAttackAnim` → `JumpAirAttackAnim` → `JumpEndAnim`) and
+  **CHANNEL → Start + looped Maintain** (`Attack02StartAnim` + N×`Attack02MaintainAnim`, N sized to
+  the window; short windows rate-stretch), both built at runtime as `UAnimComposite`s and played via
+  single-node `PlayAnimation`. THROW (`Attack01Anim`) and SNAP (`Attack03StartAnim`) unchanged. Exact
+  clips now named in the archetype table above. Composite APIs verified against the UE 5.8 headers
+  (`FAnimSegment::SetAnimReference`, `SetCompositeLength`, `UAnimationAsset::SetSkeleton`).
+- **INSPECTION CAMERA MODE** — `CameraMode` enum property (see section above); replaces
+  `bDebugOverheadCamera`.
+- **Structural change** (new `UENUM`, new `UPROPERTY`, new members) ⇒ took the **full-rebuild path**
+  with the editor closed (Live Coding cannot reinstance it). `MyProjectEditor` rebuilt clean
+  (`ReplayPlayer.cpp` + `Module.MyProject.gen.cpp` compiled, `UnrealEditor-MyProject.dll` linked,
+  Result: Succeeded).
+
+**Re-verification on the rebuilt binary (this step-E stop — full G1 per the cadence amendment):**
+
+- **Full G1 — PASS.** frost-ember **1× and 4×** and warden **1× and 4×** all **BYTE-IDENTICAL** to
+  `docs/references/` (verbatim `cmp`, no output; frost 116 lines, warden 96 lines). The leap-slam
+  composite, looped channel, and the camera-mode property moved zero bytes in the `REPLAY|` log.
+- **G1b — PASS.** frost-ember juice-**OFF** byte-identical to the reference (116 lines).
+- **Four archetype screenshots — refreshed** from the `FrontInspection` camera into
+  `docs/screenshots/act1/` (`slam-blaze`, `channel-droplet`, `throw-frost-ember`, `snap-ember`),
+  captured via the editor-viewport screen grab (`capture.ps1`; the mode was set on the PIE actor via
+  MCP `set_properties` with `CameraMode:"FrontInspection"`, then reset). Each verified by eye: both
+  wizards visible head-on, robe-tinted apart (warm vs cool), feet on floor, mid-cast with element FX /
+  status sigils / shield shell and the browser label — legible now, unlike the prior tracking-cam set.
+  *Note:* a wall-clock capture offset doesn't always land the most dramatic pose frame (e.g. the slam
+  leap apex); and a small dark placeholder sphere sits near the warm caster in every frame — a
+  pre-existing cosmetic element, not introduced by this change (G1 confirms logic is unchanged).
+
+**Cadence amendment recorded:** per lettered step run **fast-G1** = frost-ember @ 4× only; **full G1**
+(frost-ember AND warden, 1× and 4×) only at **step-E stops and before tags**. This stop ran full G1.
+
+**STOP** — Step-C revision gate-green on the rebuilt binary. (Apparatus follow-up: the in-engine `G1`
+console command lands as its own task + commit.)

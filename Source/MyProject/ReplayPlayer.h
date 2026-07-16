@@ -117,6 +117,20 @@ struct FActiveDecal
 	int32 ZoneId = -1;
 };
 
+/** Which camera renders the replay. The committed level default is LawTracking (the ratified
+ *  three-quarter view) - plain Play must always be that experience. The other two are in-editor
+ *  inspection aids the human flips transiently (leave the placed actor on LawTracking; don't save
+ *  an override): FrontInspection frames the fighters head-on and close so cast animation reads;
+ *  OverheadDebug is the retired straight-down view. Presentation-only - the choice never touches
+ *  the event loop or the REPLAY| log, so G1 byte-identity holds in every mode. */
+UENUM(BlueprintType)
+enum class EReplayCameraMode : uint8
+{
+	LawTracking     UMETA(DisplayName = "Law tracking (three-quarter, canonical)"),
+	FrontInspection UMETA(DisplayName = "Front animation view (inspection)"),
+	OverheadDebug   UMETA(DisplayName = "Overhead (debug)")
+};
+
 UCLASS()
 class MYPROJECT_API AReplayPlayer : public AActor
 {
@@ -146,10 +160,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay")
 	bool bJuiceEnabled = true;
 
-	/** Camera law: the three-quarter angled tracking view is canonical. Set true to fall
-	 *  back to the retired straight-down overhead camera (debug only). */
+	/** Camera selection (INSPECTION CAMERA MODE). LawTracking (default) is the canonical
+	 *  three-quarter tracking view and the committed level default - plain Play always uses it.
+	 *  FrontInspection (head-on animation view) and OverheadDebug are in-editor aids the human
+	 *  flips freely for animation/debug work; leave the placed actor on LawTracking so plain Play
+	 *  stays the ratified experience. Presentation-only: G1-checked, never touches the REPLAY| log. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Replay")
-	bool bDebugOverheadCamera = false;
+	EReplayCameraMode CameraMode = EReplayCameraMode::LawTracking;
 
 	/** G3 apparatus. When false, ALL on-screen TEXT is hidden - entity name labels,
 	 *  floating damage/heal numbers, cast + status word labels, the winner banner, and
@@ -196,10 +213,10 @@ private:
 	UAnimSequence* IdleAnim = nullptr;
 	// Cast archetype anims (Act 1-C), mapped from verb+delivery; play-rate is fit to the
 	// event-given cast->effect window per THE ANIMATION LAW (performance under cues).
-	UAnimSequence* ThrowAnim = nullptr;   // targeted damage / projectile (Fire_Rifle_Hip)
-	UAnimSequence* SlamAnim = nullptr;    // groundAoE / zone            (Jump_From_Stand)
-	UAnimSequence* ChannelAnim = nullptr; // heal / shield / self-buffs  (Reload_Rifle_Hip)
-	UAnimSequence* SnapAnim = nullptr;    // near-zero cast windows       (Fire_Shotgun_Hip)
+	UAnimSequence* ThrowAnim = nullptr;   // travelling projectile: Attack01Anim (staff-point cast)
+	UAnimSequence* SlamAnim = nullptr;    // groundAoE fallback: Attack04Anim (leap-slam composite when clips load)
+	UAnimSequence* ChannelAnim = nullptr; // self / heal / shield: Attack02StartAnim (Start of Start+Maintain channel)
+	UAnimSequence* SnapAnim = nullptr;    // instant/hitscan: Attack03StartAnim (quick flick)
 	// Play the archetype for a cast, play-rate stretched/trimmed to fit its window. Purely
 	// visual: reads no state, emits nothing, drives no event.
 	void PlayCastArchetype(FReplayEntity* Caster, const FReplayEvent& Cast);
@@ -230,7 +247,11 @@ private:
 	TWeakObjectPtr<AStaticMeshActor> Floor;
 	TWeakObjectPtr<ACameraActor> OverheadCamera;
 	TWeakObjectPtr<ACameraActor> TrackingCamera; // three-quarter canonical view
+	TWeakObjectPtr<ACameraActor> FrontCamera;    // head-on inspection view (FrontInspection mode)
 	void UpdateTrackingCamera(float DeltaSeconds); // frames both fighters at ~55 deg pitch
+	void UpdateFrontCamera(float DeltaSeconds);    // frames both fighters head-on, low pitch, closer
+	EReplayCameraMode AppliedCameraMode = EReplayCameraMode::LawTracking; // last mode pushed to the view
+	bool bCameraViewInit = false;                  // has the player view target been set yet
 	static constexpr float kCamPitch = -55.0f;
 	static constexpr float kCamYaw = -55.0f;
 	UStaticMesh* CubeMesh = nullptr;
