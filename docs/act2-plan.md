@@ -116,5 +116,21 @@ shows all six for the act-2-E twin-risk comparison. Per-element screenshots are 
 | zone fill | `N_Tsunami` | splashy water zone. |
 | heal motes | — | rising blue droplets (placeholder; water not a heal element here). |
 
-Native cyan hue matches `MPC.Water_Primary/_Secondary`. Refine: chunkier projectile-head glob. **Next:
-earth, air, light, shadow.**
+Native cyan hue matches `MPC.Water_Primary/_Secondary`. Refine: chunkier projectile-head glob.
+
+**Capture note:** burst/one-shot systems (explosions, asteroids) finish before a static capture, so
+`cap_elem` **reactivates** each element's components (re-assigns the system) immediately before
+`CaptureViewport`. Looping systems (shells) render either way. The persistent gallery is a reference;
+the per-element screenshots (captured with reactivation) are the record.
+
+### earth (committed) — `docs/screenshots/act2/earth-substance-lab.png`
+| socket | system | reads |
+|---|---|---|
+| projectile head | `N_MagicalAsteroid` | dark rock/asteroid orb (reads as a hurled solid; slightly purple — refine toward a browner Jayant lowpoly rock mesh for true diegetic earth). |
+| impact burst | `N_EarthExplosion` | **strong** — chunky radial burst of brown rock debris; the definitive chibi-bold earth read. |
+| trail | `NS_SlashTrail_Sand_` | sandy trail (motion-dependent). |
+| shell surface | `N_MagmaShield` | dark rocky sphere veined with glowing lava cracks — reads as rock/magma shell (there is no `N_EarthShield`; magma is the closest earth-family shell). |
+| zone fill | `N_MagmaWall` | magma/rock wall. |
+| heal motes | — | rising dust/pebbles (placeholder). |
+
+Chunky flat-shaded rock silhouettes satisfy NO PERFECT PRIMITIVES natively. **Next: air, light, shadow.**
