@@ -113,12 +113,24 @@ floor). Render confirmed in live PIE by the human.
   length × speed / window, fit to the event-given cast→effect window per THE ANIMATION LAW.
 - **D — socket origins** (`f021797`): projectiles leave `hand_r`, self/channel emit from `spine_03`,
   slam dust at `foot_r`, heal/shield anchor to the chest.
-- **G1:** accepted done (human live-PIE check). The change is presentation-only — the event loop and
-  the `REPLAY|` echo are untouched — and the mannequin build's frost-ember 1×/4× was already
-  byte-identical, so G1 holds by construction for the wizard build.
-- **Screenshots:** waived by the human ("consider that part done"). MCP `CaptureViewport` renders a
-  gizmo/debug-sphere artifact over PIE-spawned skeletal actors (not the clean game view), so an
-  editor-placed `WizardSM` was captured clean instead as proof the asset renders, and the live PIE
-  render was human-confirmed. No `docs/screenshots/act1/` set produced.
+- **C archetype-selection correction** (Live-Coded body tweak, source committed): the corpus models
+  nearly every cast with a **~0 cast→effect window**, so the original window-first rule (SNAP when
+  window < 0.05) collapsed almost everything to SNAP — SLAM and CHANNEL never fired, only THROW
+  (frost-ember's 3 windowed casts) + SNAP. Fixed `PlayCastArchetype` to select **delivery-first**:
+  GroundAoE→SLAM, Self→CHANNEL, windowed Projectile→THROW, instant/hitscan or unresolved→SNAP; the
+  window still drives play-rate. Now all four differentiate: SLAM on groundAoE showcases, CHANNEL on
+  self showcases, THROW on frost-ember, SNAP on instant projectiles.
+- **G1 (final/patched build):** frost-ember **1× and 4×** and warden **1× and 4×** all
+  **BYTE-IDENTICAL** to `docs/references/` (verbatim `cmp`, no output). The archetype fix is
+  presentation-only (event loop + `REPLAY|` echo untouched), verified byte-identical both before and
+  after the Live-Coding patch.
+- **G1b:** frost-ember juice-**OFF** rendered **BYTE-IDENTICAL** to the reference (== juice-on == ref).
+- **Screenshots (`docs/screenshots/act1/`):** four archetypes, one each, captured via a PowerShell
+  screen-grab of the live editor viewport (`slam-blaze.png`, `channel-droplet.png`,
+  `throw-frost-ember.png`, `snap-ember.png`). Note: MCP `CaptureViewport` cannot capture PIE-spawned
+  skeletal actors — it renders an editor gizmo (spoked-wheel proxy), not the skinned wizard — so the
+  screen-grab of the real game view was used and each was verified as a genuine editor render (both
+  wizards visible, tinted apart, mid-cast with element FX + the browser label).
 
-**STOP** — phase one complete on the wizard body; phase two (substance/beauty) opens next.
+**STOP** — phase one complete on the wizard body; both fixtures gate green, four archetype
+screenshots filed. Phase two (substance/beauty) Step B unlocks after this stop is audited.
