@@ -163,4 +163,45 @@ read markedly better on the dark arena floor, and/or with a bolder `MPC.Air` tin
 wall cannot be recoloured to gold via user params — only `N_LightBlast` (white) reads as light out of the
 box. Fixes for integration/refinement: (a) author a light-tinted **material instance** of the Energy
 shield/wall material (gold), or (b) source a white/gold shield elsewhere. The SlashTrail trail's `Color`
-User var CAN be set to `MPC.Light` (gold). Logged as the first real per-element gap. **Next: shadow.**
+User var CAN be set to `MPC.Light` (gold). Logged as the first real per-element gap.
+
+### shadow (committed) — `docs/screenshots/act2/shadow-substance-lab.png`
+| socket | system | reads |
+|---|---|---|
+| projectile head | `NS_AuraFX_Dark` | dark smoke orb. |
+| impact burst | `N_BlackholeExplosion` | dark implosion/burst. |
+| trail | `NS_SlashTrail_Dark` | dark smoke trail; `Color` User var present. |
+| shell surface | `N_CurseShieldStylized` | **strong** — dark violet smoky translucent sphere; matte tendrils (diegetic shadow). |
+| zone fill | `N_CurseWall` | purple-veined smoke wall. |
+| heal motes | — | dark motes (rare; placeholder). |
+
+Reads as matte violet/near-black smoke. **Twin-risk observed:** shadow (violet) sits close to the light
+shell's (mistaken) magenta — fixing light to warm-white/gold (above) also separates it from shadow/arcane.
+
+## Step B — DONE (six exercised elements prototyped)
+
+All six corpus-exercised elements are prototyped in the `/Game/TestMaps/SubstanceLab` gallery, one row each,
+committed per element with a screenshot. Summary:
+
+- **Strong reads:** fire (blast + flame shell), water (aqua shell), earth (rock-debris burst + magma
+  shell), shadow (violet smoke shell). **Correct-but-partial:** light (white blast correct; shell magenta).
+  **Faint:** air (translucent wind, washes out on the white floor).
+- **Findings that shape integration (act-two step C):**
+  1. MegaMagic ships **per-element** systems with **no color User param** → each element uses its own
+     native system; the **MPC palette is the source of truth**, not a live tint, for those. Where a generic
+     system is reused, the **SlashTrail `Color` User var** is the tint hook.
+  2. **light hue gap** — Energy shell/wall render magenta; needs a gold **material instance** (or a
+     white/gold shield asset) to read as light. Highest-priority refinement.
+  3. **air** needs the dark arena floor and/or a bolder tint to read; it's motion-forward.
+  4. **earth projectile head** → prefer a browner Jayant lowpoly rock over the purplish `MagicalAsteroid`.
+  5. **burst systems** need reactivation to capture (baked into `cap_elem`); in the live arena the M2-D
+     socket layer will trigger them on the event, so this is a capture-only concern.
+- **NO PERFECT PRIMITIVES:** shells are spheres but each carries native surface motion (flame bands, water
+  caustics, lava cracks, wind swirls, energy hex, violet smoke) supplying silhouette irregularity.
+- **nature / arcane** substance sets remain **unexercised** (no corpus concept spells yet) — built only when
+  the 61-showcase refresh lands, per the coverage verdict above.
+
+**GATE (unchanged):** act-two **step C (integration into the live arena) does NOT start** — it requires act
+one's steps **C and D finished first** (the shield/ward → Defend remap, self-mobility mapping, and the
+socket-origin pass). We return to the animations before anything integrates. Animation law + fast-G1
+cadence remain in force. Step B stands as a prototyped, documented sandbox.
