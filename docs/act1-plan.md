@@ -36,14 +36,39 @@ Equip_Rifle/Pistol_Standing, Aim_Space_Hip, plus crouch/prone variants. There ar
 spellcasting anims**, so the four cast archetypes are mapped onto the closest shooter motions;
 a bespoke caster set is a later phase.
 
-## Archetype → animation mapping (verb + delivery → montage)
+## Step-A amendment — Wizard for Battle: PBR rig evaluation (RATIFIED as primary body)
 
-| archetype | triggers (verb / delivery) | ASP anim | why / window |
+Pack: `Content/BattleWizardPBR`. Evaluated for the four criteria:
+- **Skeleton sanity — PASS.** `WizardSM` is a genuine SkeletalMesh, and the pack ships
+  `Meshes/UE4_Mannequin_Skeleton` — the wizard is rigged to the **same UE4 mannequin skeleton**
+  as SK_Mannequin. So the existing machinery works unchanged: the `hand_r`/`head`/`spine_03`/
+  `foot_r` bones all exist, `SocketWorld`/`HeadWorld` resolve, and single-node `PlayAnimation`
+  drives it directly.
+- **Scale — standard.** Shares the mannequin skeleton (≈180 cm); confirmed at build (spawned
+  actor bounds ≈ humanoid, feet on floor).
+- **Animations slice into archetypes — PASS.** Rich cast set: `Attack01`, `Attack02Start/Maintain`,
+  `Attack03Start/Maintain`, `Attack04`, `Defend*`, `Idle01/02/03`, `Die`, `GetHit`, `Jump*`,
+  `PotionDrink`. Each archetype maps to a real clip (below); play-rate fits it to the window.
+- **Tint — better than the mannequin.** Body material is `PBRMaskTintMatInst` (mask-tint) with
+  three color params `OuterClothes` / `InnerCloth` / `Hair`; the two sides tint the robe warm (A)
+  vs cool (B).
+
+**Verdict: rig is sound → Step B builds on the wizard (both sides = wizard, tinted apart); the
+mannequin is not used as the fighter body.** (SK_Mannequin/ASP remain in Content, unused by the
+casters.)
+
+## Archetype → animation mapping (verb + delivery → wizard montage)
+
+| archetype | triggers (verb / delivery) | wizard anim | why / window |
 |---|---|---|---|
-| **THROW** | targeted damage, `projectile`/`targetUnit` | `Fire_Rifle_Hip` | forward arm projection from `hand_r`; play-rate = len / (effect.t − cast.t) so the "release" lands on the effect event; projectile head spawns at `hand_r`. |
-| **SLAM** | `groundAoE` / `spawnZone` | `Jump_From_Stand` | the leap-and-land reads as a ground impact; timed so the landing coincides with `ZoneSpawned`; telegraph/dust at the feet. (Approximation — ASP has no melee slam.) |
-| **CHANNEL** | `heal`, `shield`, self-buffs (`self` delivery, `modifyStat`) | `Reload_Rifle_Hip` | sustained, two-handed, self-focused; stretched across the cast→effect window; motes/shell emit from chest/hands. |
-| **SNAP** | near-zero cast windows (effect.t − cast.t < ~kHitscanGap) | `Fire_Shotgun_Hip` | a single quick burst, play-rate pushed high to fit the near-instant window; from `hand_r`. |
+| **THROW** | targeted damage, `projectile`/`targetUnit` | `Attack01Anim` | staff-point forward cast; play-rate = len / (effect.t − cast.t) so the release lands on the effect event; projectile head spawns at `hand_r`. |
+| **SLAM** | `groundAoE` / `spawnZone` | `Attack04Anim` | grounded area attack; fit to cast→`ZoneSpawned`; foot dust at the feet, decal at the event centre (Law 2). |
+| **CHANNEL** | `heal`, `shield`, self-buffs (`self` delivery) | `Attack02StartAnim` | the start of a maintained channel; stretched across the cast→effect window; emit from chest. |
+| **SNAP** | near-zero cast windows (effect.t − cast.t < ~kHitscanGap) | `Attack03StartAnim` | a quick attack start, play-rate pushed high to fit the near-instant window; from `hand_r`. |
+
+Idle stance = `Idle01Anim`. Death keeps the grey-out (a `DieAnim` montage is a later refinement).
+Mapping is by clip name + role; refined after visual review at Step E. Start/Maintain montage
+splits are collapsed to the Start clip for phase 1 (single-clip play-rate fit).
 
 **Play-rate law (all archetypes):** `PlayRate = AnimSequenceLength / max(window, epsilon)`, where
 `window` is the event-given cast→effect (or cast→zone-spawn) gap in sim seconds. The montage is
