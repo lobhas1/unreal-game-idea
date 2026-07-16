@@ -212,6 +212,8 @@ private:
 
 	TArray<FString> ShowcaseOrder;   // ordered showcase ids from the manifest (browser order)
 	int32 CurrentShowcaseIndex = -1; // index into ShowcaseOrder, or -1 when the current replay isn't a showcase
+	int32 PrimaryCasterId = 0;       // the replay's first caster; the showcase browser frames THIS entity so the
+	                                 // cast animation stays legible instead of the camera pulling back to fit both
 	FString CurrentDisplayName;      // shown on screen as the browser label
 	bool bScaffoldInit = false;      // one-time spawn of persistent cameras + light
 

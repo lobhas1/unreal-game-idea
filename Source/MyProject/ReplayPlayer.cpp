@@ -243,6 +243,16 @@ bool AReplayPlayer::LoadReplay()
 	}
 
 	ClassifyDeliveries();
+
+	// Primary caster: the first CastStarted's caster. The showcase browser frames this entity
+	// (a showcase is one caster demonstrating a spell on a dummy), so the cast animation reads
+	// instead of the camera pulling back to fit both. Presentation-only - never touches the log.
+	PrimaryCasterId = 0;
+	for (const FReplayEvent& Ev : Events)
+	{
+		if (Ev.Type == TEXT("CastStarted")) { PrimaryCasterId = Ev.CasterId; break; }
+	}
+
 	return Events.Num() > 0;
 }
 
@@ -298,15 +308,17 @@ void AReplayPlayer::LoadAndBuild(const FString& NewReplayPath)
 	UE_LOG(LogReplay, Display, TEXT("ReplayPlayer: loaded '%s' (%d events, %d entities, duration=%f, winner=%s, endReason=%s)"),
 		*ReplayPath, Events.Num(), Entities.Num(), DurationSeconds, *WinnerName, *EndReason);
 
-	BuildScaffold();
-
-	// Browser label + index resolved from the path ("beacon.replay.json" -> "beacon").
+	// Browser label + index resolved from the path ("beacon.replay.json" -> "beacon"). Resolved
+	// BEFORE BuildScaffold so the scaffold's initial camera snap already knows this is a showcase
+	// and frames the caster on the very first frame (no one-frame pull-back to fit both fighters).
 	CurrentDisplayName = FPaths::GetBaseFilename(NewReplayPath);
 	CurrentDisplayName.RemoveFromEnd(TEXT(".replay"));
 	CurrentShowcaseIndex = ShowcaseOrder.IndexOfByPredicate([&NewReplayPath](const FString& Id)
 	{
 		return NewReplayPath.Contains(FString::Printf(TEXT("Showcases/%s.replay.json"), *Id));
 	});
+
+	BuildScaffold();
 }
 
 void AReplayPlayer::TeardownScene()
@@ -543,7 +555,30 @@ void AReplayPlayer::UpdateTrackingCamera(float DeltaSeconds)
 {
 	if (!TrackingCamera.IsValid() || Entities.Num() == 0) { return; }
 
-	// Frame both fighters: midpoint + spread of their current world positions.
+	const FRotator Rot(kCamPitch, kCamYaw, 0.f);
+
+	// Showcase browser: lock the frame on the caster so the cast animation stays large and centred,
+	// instead of pulling back to fit the distant dummy (which shrinks the caster into the corner and
+	// reads as "the camera went to the top"). A showcase is one caster + a nearby dummy, so a fixed
+	// close distance keeps the caster dominant while the dummy stays loosely in view. Presentation-only:
+	// this never touches the event loop or the REPLAY| log, so G1 byte-identity holds.
+	if (CurrentShowcaseIndex >= 0)
+	{
+		if (const FReplayEntity* Caster = FindEntity(PrimaryCasterId))
+		{
+			const FVector Focus = SimToWorld(Caster->CurrentSim) + FVector(0, 0, 120.f);
+			const float R = 1100.f; // fixed: keep the caster prominent regardless of dummy distance
+			const FVector DesiredLoc = Focus - Rot.Vector() * R;
+			const FVector NewLoc = (DeltaSeconds <= 0.f)
+				? DesiredLoc
+				: FMath::VInterpTo(CameraBaseLoc, DesiredLoc, DeltaSeconds, 3.0f);
+			TrackingCamera->SetActorLocationAndRotation(NewLoc, Rot);
+			CameraBaseLoc = NewLoc;
+			return;
+		}
+	}
+
+	// Non-showcase (M1 fights): frame both fighters - midpoint + spread of their current world positions.
 	FVector Mid = FVector::ZeroVector;
 	FVector Lo(TNumericLimits<float>::Max()), Hi(TNumericLimits<float>::Lowest());
 	for (const FReplayEntity& E : Entities)
@@ -558,7 +593,6 @@ void AReplayPlayer::UpdateTrackingCamera(float DeltaSeconds)
 	// Distance so both fit with comfortable margin; pitched down ~55 deg, three-quarter yaw.
 	const float Spread = FVector::Dist(Lo, Hi);
 	const float R = FMath::Clamp(Spread * 1.6f + 700.f, 800.f, 5000.f);
-	const FRotator Rot(kCamPitch, kCamYaw, 0.f);
 	const FVector DesiredLoc = Mid - Rot.Vector() * R;
 
 	// Snap on the first frame (DeltaSeconds<=0), then track smoothly with no cuts.
