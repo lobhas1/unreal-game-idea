@@ -100,5 +100,21 @@ right hue, with the `Color` User var set from the MPC where a generic system is 
 | heal motes | — | N/A (fire is not a heal element); ember-rise placeholder only. |
 
 Scale vs the wizard reads acceptable; a slight scale-up would push boldness. Silhouette noise comes from
-each system's native modules (flicker/turbulence), satisfying the no-perfect-primitives clause. **Next:
-water, then earth, air, light, shadow — committing per element or pair.**
+each system's native modules (flicker/turbulence), satisfying the no-perfect-primitives clause.
+
+**Gallery layout (ratified):** persistent gallery — each element kept in its own row (Y offset 600 apart:
+fire 0, water 600, earth 1200, air 1800, light 2400, shadow 3000) on the shared floor, so the final map
+shows all six for the act-2-E twin-risk comparison. Per-element screenshots are the committed record.
+
+### water (committed) — `docs/screenshots/act2/water-substance-lab.png`
+| socket | system | reads |
+|---|---|---|
+| projectile head | `NS_AuraFX_Water` | cyan water aura (subtle static; a chunkier glob would push diegetic-substance). |
+| impact burst | `NS_Hit_water` | splash burst. |
+| trail | `NS_SlashTrail_Water` | motion-dependent; `Color` User var present. |
+| shell surface | `N_AquaShield` | **strong read** — translucent cyan sphere with flowing water caustics on its surface (diegetic: water shaped into a shell); flame-free, wobble/caustic motion supplies silhouette irregularity. |
+| zone fill | `N_Tsunami` | splashy water zone. |
+| heal motes | — | rising blue droplets (placeholder; water not a heal element here). |
+
+Native cyan hue matches `MPC.Water_Primary/_Secondary`. Refine: chunkier projectile-head glob. **Next:
+earth, air, light, shadow.**
