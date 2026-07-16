@@ -53,9 +53,15 @@ void AReplayPlayer::BeginPlay()
 	CubeMesh     = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	CylinderMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 
-	// Act 1 skeletal casters: the UE4 mannequin + a looping idle for a natural stance.
-	MannequinMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/AnimStarterPack/UE4_Mannequin/Mesh/SK_Mannequin.SK_Mannequin"));
-	IdleAnim      = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/AnimStarterPack/Idle_Rifle_Hip.Idle_Rifle_Hip"));
+	// Act 1 skeletal casters: the ratified BattleWizardPBR mage (rigged to the UE4 mannequin
+	// skeleton, so the same sockets/anim machinery apply) + a looping idle for a natural stance.
+	BodyMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/BattleWizardPBR/Meshes/WizardSM.WizardSM"));
+	IdleAnim    = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Idle01Anim.Idle01Anim"));
+	// Cast archetype anims (Act 1-C), mapped to the wizard's clips.
+	ThrowAnim   = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Attack01Anim.Attack01Anim"));
+	SlamAnim    = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Attack04Anim.Attack04Anim"));
+	ChannelAnim = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Attack02StartAnim.Attack02StartAnim"));
+	SnapAnim    = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Attack03StartAnim.Attack03StartAnim"));
 
 	// M2 verb archetypes (element-tinted via User.Color / scale from share). Loaded by
 	// soft path; grammar maps event type -> archetype, no per-spell authoring.
@@ -421,7 +427,7 @@ void AReplayPlayer::BuildScaffold()
 	int32 SideIdx = 0;
 	for (FReplayEntity& E : Entities)
 	{
-		if (!MannequinMesh) { break; }
+		if (!BodyMesh) { break; }
 		const FVector Loc = SimToWorld(E.Spawn); // mannequin root is at the feet
 		FVector Face = CenterW - Loc; Face.Z = 0.f;      // face the arena centre
 		const FRotator Rot = Face.IsNearlyZero() ? FRotator::ZeroRotator : Face.Rotation();
@@ -429,7 +435,7 @@ void AReplayPlayer::BuildScaffold()
 		if (!Body) { continue; }
 		USkeletalMeshComponent* SMC = Body->GetSkeletalMeshComponent();
 		if (SMC) { SMC->SetMobility(EComponentMobility::Movable); }
-		SMC->SetSkeletalMeshAsset(MannequinMesh);
+		SMC->SetSkeletalMeshAsset(BodyMesh);
 		if (IdleAnim)
 		{
 			SMC->SetAnimationMode(EAnimationMode::AnimationSingleNode);
@@ -439,7 +445,9 @@ void AReplayPlayer::BuildScaffold()
 		{
 			const FLinearColor Tint = (SideIdx == 0) ? FLinearColor(0.90f, 0.32f, 0.22f)  // A: warm
 			                                         : FLinearColor(0.28f, 0.48f, 0.95f); // B: cool
-			MID->SetVectorParameterValue(TEXT("BodyColor"), Tint);
+			// Wizard mask-tint (PBRMaskTintMat): robe + inner cloth carry the per-side colour.
+			MID->SetVectorParameterValue(TEXT("OuterClothes"), Tint);
+			MID->SetVectorParameterValue(TEXT("InnerCloth"), Tint);
 			E.BodyMID = MID;
 		}
 		Body->SetActorLabel(*FString::Printf(TEXT("Caster_%s"), *E.Name));
@@ -712,6 +720,48 @@ FVector AReplayPlayer::HeadWorld(const FReplayEntity& E) const
 	return SimToWorld(E.CurrentSim) + FVector(0, 0, 200.f);
 }
 
+FVector AReplayPlayer::SocketWorld(const FReplayEntity& E, FName Bone, const FVector& Fallback) const
+{
+	if (E.Body.IsValid())
+	{
+		if (USkeletalMeshComponent* SMC = E.Body->GetSkeletalMeshComponent())
+		{
+			if (SMC->GetBoneIndex(Bone) != INDEX_NONE || SMC->DoesSocketExist(Bone))
+			{
+				return SMC->GetSocketLocation(Bone);
+			}
+		}
+	}
+	return Fallback;
+}
+
+void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast)
+{
+	// THE ANIMATION LAW: the cast archetype is performance under the event clock. Pick the
+	// archetype from verb+delivery, then trim/stretch the play-rate so the anim fits the
+	// event-given cast->effect window. It reads no state, emits nothing, drives no event -
+	// the REPLAY| loop runs independently off SimTime, so G1 is untouched.
+	if (!E || !E->Body.IsValid()) { return; }
+	USkeletalMeshComponent* SMC = E->Body->GetSkeletalMeshComponent();
+	if (!SMC) { return; }
+
+	const double Window = Cast.EffectT - Cast.T;
+	UAnimSequence* Anim =
+		(Window < kHitscanGap)                        ? SnapAnim  :   // near-zero window: a quick flick
+		(Cast.Delivery == EReplayDelivery::GroundAoE) ? SlamAnim  :   // zone: leap-and-land slam
+		(Cast.Delivery == EReplayDelivery::Self)      ? ChannelAnim : // self: sustained channel
+		                                                 ThrowAnim;   // projectile / default: throw
+	if (!Anim) { return; }
+
+	const float Len = Anim->GetPlayLength();
+	const double W = FMath::Max(Window, 0.05);        // floor keeps the SNAP rate finite
+	// Window is sim-seconds; wall-clock window = W / SpeedMultiplier, so scale the rate by speed
+	// to keep the fit exact at any playback speed.
+	const float Rate = FMath::Clamp((float)((double)Len * FMath::Max(SpeedMultiplier, 0.01f) / W), 0.1f, 12.f);
+	SMC->PlayAnimation(Anim, false); // single-node, non-looping; holds last pose then idle resumes on next cast
+	SMC->SetPlayRate(Rate);
+}
+
 void AReplayPlayer::SpawnVerbFX(UNiagaraSystem* System, const FVector& Loc,
                                 const FString& ClauseElement, float Scale)
 {
@@ -828,9 +878,10 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 				E->bDead = true;
 				if (E->BodyMID.IsValid())
 					{
-						// Death grey-out: drain the per-side BodyColor tint to grey (Act 1 keeps
-						// the M1 grey-out; a Death montage is a later refinement).
-						E->BodyMID->SetVectorParameterValue(TEXT("BodyColor"), FLinearColor(0.3f, 0.3f, 0.3f, 1.f));
+						// Death grey-out: drain the per-side mask tint to grey (Act 1 keeps the
+						// M1 grey-out; a DieAnim montage is a later refinement).
+						E->BodyMID->SetVectorParameterValue(TEXT("OuterClothes"), FLinearColor(0.3f, 0.3f, 0.3f, 1.f));
+						E->BodyMID->SetVectorParameterValue(TEXT("InnerCloth"), FLinearColor(0.3f, 0.3f, 0.3f, 1.f));
 					}
 			}
 		}
@@ -844,7 +895,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		// no clause element carried by Healed events).
 		if (FReplayEntity* E = FindEntity(Target))
 		{
-			SpawnVerbFX(HealFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), FString(), 1.0f);
+			SpawnVerbFX(HealFX, SocketWorld(*E, TEXT("spine_03"), SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f)), FString(), 1.0f);
 		}
 	}
 	else if (Event.Type == TEXT("StatusApplied"))
@@ -881,7 +932,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		{
 			if (SphereMesh && ShieldMat && World)
 			{
-				const FVector Loc = SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f);
+				const FVector Loc = SocketWorld(*E, TEXT("spine_03"), SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f));
 				if (AStaticMeshActor* Shell = World->SpawnActor<AStaticMeshActor>(Loc, FRotator::ZeroRotator))
 				{
 					Shell->SetMobility(EComponentMobility::Movable);
@@ -923,6 +974,8 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		Float(HeadOf(Caster) + FVector(0, 0, 40.f), Spell, FColor::White);
 		// Concept-element palette for this cast's clauses (empty if not a showcase spell).
 		CurrentConceptElement = SpellElement.FindRef(Spell.ToLower());
+		// Act 1-C: play the caster's cast archetype (play-rate fit to this cast's window).
+		PlayCastArchetype(FindEntity(Event.CasterId), Event);
 
 		// Delivery trajectory (Step D), resolved from the event stream by
 		// ClassifyDeliveries. Element tint comes from the resolving effect's element.
@@ -932,8 +985,10 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 			FReplayEntity* TE = FindEntity(Event.EffectTargetId);
 			if (CE && TE)
 			{
-				const FVector FromW = SimToWorld(CE->CurrentSim) + FVector(0, 0, 120.f);
-				const FVector ToW   = SimToWorld(TE->CurrentSim) + FVector(0, 0, 120.f);
+				// Step D: throws/projectiles leave from the caster's hand_r socket (the M2-D
+				// swappable projectile head spawns here); they fly to the target's chest.
+				const FVector FromW = SocketWorld(*CE, TEXT("hand_r"), SimToWorld(CE->CurrentSim) + FVector(0, 0, 120.f));
+				const FVector ToW   = SocketWorld(*TE, TEXT("spine_03"), SimToWorld(TE->CurrentSim) + FVector(0, 0, 120.f));
 				const FElementPalette Pal = ReplayGrammar::Resolve(CurrentConceptElement, Event.EffectElement, FString());
 				if (Event.EffectT - Event.T < kHitscanGap)
 				{
@@ -956,11 +1011,10 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		}
 		else if (Event.Delivery == EReplayDelivery::Self)
 		{
-			// self delivery: a radial burst at the caster (element tint if the self-effect
-			// carries one; else the default). The verb effect renders separately.
+			// self delivery / channel: a radial burst emitted from the caster's chest (Step D).
 			if (FReplayEntity* CE = FindEntity(Event.CasterId))
 			{
-				SpawnVerbFX(SelfBurstFX, SimToWorld(CE->CurrentSim) + FVector(0, 0, 100.f),
+				SpawnVerbFX(SelfBurstFX, SocketWorld(*CE, TEXT("spine_03"), SimToWorld(CE->CurrentSim) + FVector(0, 0, 100.f)),
 					Event.EffectElement, 1.0f);
 			}
 		}
@@ -971,6 +1025,12 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 			// element => inherits the cast's concept palette.
 			SpawnZoneDecal(Event.ZoneCenterSim,
 				Event.ZoneRadiusSim > 0.0 ? Event.ZoneRadiusSim : 2.0, 0.12f, -1, Event.EffectElement);
+			// Step D: slam telegraph - dust at the caster's feet (the decal itself stays at the
+			// event-given zone centre, Law 2).
+			if (FReplayEntity* CE = FindEntity(Event.CasterId))
+			{
+				SpawnVerbFX(DisplaceFX, SocketWorld(*CE, TEXT("foot_r"), SimToWorld(CE->CurrentSim)), FString(), 0.6f);
+			}
 		}
 	}
 	else if (Event.Type == TEXT("CastFailed"))

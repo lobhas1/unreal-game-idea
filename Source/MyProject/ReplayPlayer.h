@@ -61,8 +61,8 @@ struct FReplayEntity
 	FString Name;
 	double MaxHp = 0.0;
 	FVector Spawn = FVector::ZeroVector; // sim coordinates (unscaled)
-	TWeakObjectPtr<ASkeletalMeshActor> Body;            // mannequin skeletal caster (Act 1)
-	TWeakObjectPtr<UMaterialInstanceDynamic> BodyMID;   // per-side BodyColor tint + death grey-out
+	TWeakObjectPtr<ASkeletalMeshActor> Body;            // wizard skeletal caster (Act 1)
+	TWeakObjectPtr<UMaterialInstanceDynamic> BodyMID;   // per-side mask tint + death grey-out
 	FVector CurrentSim = FVector::ZeroVector; // current sim-space position
 	FVector TargetSim = FVector::ZeroVector;  // displace target (sim space)
 	bool bDead = false;
@@ -192,8 +192,19 @@ private:
 	bool bScaffoldInit = false;      // one-time spawn of persistent cameras + light
 
 	// --- skeletal casters (Act 1): mannequin body + a looping idle so the stance reads ---
-	USkeletalMesh* MannequinMesh = nullptr;
+	USkeletalMesh* BodyMesh = nullptr;
 	UAnimSequence* IdleAnim = nullptr;
+	// Cast archetype anims (Act 1-C), mapped from verb+delivery; play-rate is fit to the
+	// event-given cast->effect window per THE ANIMATION LAW (performance under cues).
+	UAnimSequence* ThrowAnim = nullptr;   // targeted damage / projectile (Fire_Rifle_Hip)
+	UAnimSequence* SlamAnim = nullptr;    // groundAoE / zone            (Jump_From_Stand)
+	UAnimSequence* ChannelAnim = nullptr; // heal / shield / self-buffs  (Reload_Rifle_Hip)
+	UAnimSequence* SnapAnim = nullptr;    // near-zero cast windows       (Fire_Shotgun_Hip)
+	// Play the archetype for a cast, play-rate stretched/trimmed to fit its window. Purely
+	// visual: reads no state, emits nothing, drives no event.
+	void PlayCastArchetype(FReplayEntity* Caster, const FReplayEvent& Cast);
+	// World location of a body bone (socket), or a fallback if the body isn't spawned.
+	FVector SocketWorld(const FReplayEntity& E, FName Bone, const FVector& Fallback) const;
 	// World location of an entity's head bone (label / sigil / damage-number anchor), or a
 	// sensible fallback above the sim position if the body isn't spawned.
 	FVector HeadWorld(const FReplayEntity& E) const;
