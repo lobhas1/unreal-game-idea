@@ -108,6 +108,11 @@ fresh tester.
 
 ## Direction addendum v2 — the beauty pass (banked 2026-07-12; NON-BINDING for M2 gates)
 Ratified direction for a future visual round, not a requirement of the current build.
+
+STYLE REFERENCE (ratified 2026-07-16, supersedes the 2026-07-13 Genshin line):
+CHIBI-BOLD — bold, saturated, palette-primary colors; chunky, readable shapes;
+exaggerated stylized motion; prefer Stylized asset variants (Torchlight/Hearthstone-
+family stylization). A style direction, not a quality-parity target.
 1. DIEGETIC SUBSTANCE. Effects are made of their element's physical substance doing
    physically readable things, not abstract glows. Projectiles especially: the flying
    body itself is elemental — a fire throw is a ball of fire, a water throw a coherent
@@ -142,3 +147,21 @@ Scope: opens as its own milestone after M2's gates close.
    when the round opens. Visual sameness between spells with near-identical
    mechanics is treated as a CANON question (convergence candidate), never
    masked by cosmetic differentiation.
+
+6. COVERAGE PRINCIPLE. No closed vocabulary represents all imaginable spells at full
+   fidelity; it does not need to. The naming doctrine's convergence-onto-known-things
+   bounds the space of visual identities the canon actually produces, so the motif
+   vocabulary chases a convergent target. Coverage is tiered by design: function always
+   reads (Law 4 floor); recurring concept families get true identity; the figurative
+   long tail gets nearest-motif approximation, with name, flavor, and mechanics
+   carrying residual meaning. Gaps that recur become data-votes for widening. Adequacy
+   is not asserted but measured: the motif round's blind concept-to-visual matching
+   test is its gate.
+
+7. MOTIF VARIATION PRINCIPLE. Motifs are parameterized templates, never stamps.
+   Each motif instance derives its substance and texture from its element (fire
+   wings are flame-stuff, light wings glow-feathers, shadow wings smoke), its
+   scale and intensity from the bands, and per-concept variation (silhouette
+   noise, animation phase, additive detail) from a seed keyed to the concept —
+   so concepts sharing a motif read as kin, never as identical twins in
+   different colours. Enforcement: the twin test (clause 5).
