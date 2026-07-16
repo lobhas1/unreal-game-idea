@@ -96,5 +96,29 @@ Every substep ends with a G1 re-check (frost-ember; full G1 = frost-ember AND wa
 1x and 4x, byte-diffed vs `docs/references/` — presentation must move zero bytes. G1b spot-check and
 four mid-animation archetype screenshots at Step E into `docs/screenshots/act1/`.
 
-## Results log
-(filled at Step E)
+## Results log (Step E)
+
+**Body ratification (decided):** the human ratified the **BattleWizardPBR mage** as the primary
+body. Rig evaluated sound — `WizardSM`, `Idle01Anim`, and the `Attack*` clips all share
+`/Game/BattleWizardPBR/Meshes/UE4_Mannequin_Skeleton`, so the mannequin-era machinery (sockets,
+single-node playback) applies unchanged; actor bounds ≈ 127×175 uu (standard humanoid, feet on
+floor). Render confirmed in live PIE by the human.
+
+- **B — body swap** (commit `f021797`): both combatants are `WizardSM` skeletal casters, feet on
+  floor, looping `Idle01Anim`; robe tinted per side via `PBRMaskTintMat` `OuterClothes`/`InnerCloth`
+  (A warm / B cool). Labels/sigils/damage-numbers anchor to the `head` bone; death grey-out drains
+  the mask tint to grey.
+- **C — cast archetypes** (`f021797`): `PlayCastArchetype` maps verb+delivery → THROW `Attack01Anim`,
+  SLAM `Attack04Anim`, CHANNEL `Attack02StartAnim`, SNAP `Attack03StartAnim`; play-rate = clip
+  length × speed / window, fit to the event-given cast→effect window per THE ANIMATION LAW.
+- **D — socket origins** (`f021797`): projectiles leave `hand_r`, self/channel emit from `spine_03`,
+  slam dust at `foot_r`, heal/shield anchor to the chest.
+- **G1:** accepted done (human live-PIE check). The change is presentation-only — the event loop and
+  the `REPLAY|` echo are untouched — and the mannequin build's frost-ember 1×/4× was already
+  byte-identical, so G1 holds by construction for the wizard build.
+- **Screenshots:** waived by the human ("consider that part done"). MCP `CaptureViewport` renders a
+  gizmo/debug-sphere artifact over PIE-spawned skeletal actors (not the clean game view), so an
+  editor-placed `WizardSM` was captured clean instead as proof the asset renders, and the live PIE
+  render was human-confirmed. No `docs/screenshots/act1/` set produced.
+
+**STOP** — phase one complete on the wizard body; phase two (substance/beauty) opens next.
