@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "drift",
+    "kitA": "penumbra",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/drift.record.json",
+    "kitAPath": "arena/fusions/penumbra-779a5033.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -11,13 +11,13 @@
       "mana": 10000,
       "amplifyMajor": 2.5
     },
-    "durationSeconds": 3.499997854232788,
+    "durationSeconds": 6.400006294250488,
     "winner": "draw",
     "endReason": "quiescent",
     "entities": [
       {
         "id": 1,
-        "name": "drift",
+        "name": "penumbra",
         "maxHp": 1600,
         "spawn": {
           "x": 0,
@@ -41,44 +41,46 @@
   },
   "events": [
     {
-      "t": 0,
+      "t": 0.40000003576278687,
       "type": "CastStarted",
-      "canonical": "cast E1 drift",
+      "canonical": "cast E1 penumbra",
       "payload": {
         "caster": 1,
-        "spell": "drift"
+        "spell": "penumbra"
       }
     },
     {
-      "t": 0,
-      "type": "Displaced",
-      "canonical": "displace E1 Dash to=(0,0,0) blocked=False",
+      "t": 0.40000003576278687,
+      "type": "StatusApplied",
+      "canonical": "status E2 Blind dur=5 stacks=1 refreshed=False",
       "payload": {
-        "subject": 1,
-        "mode": "Dash",
-        "from": {
-          "x": 0,
-          "y": 0,
-          "z": 0
-        },
-        "to": {
-          "x": 0,
-          "y": 0,
-          "z": 0
-        },
-        "blocked": false
+        "target": 2,
+        "status": "Blind",
+        "duration": 5,
+        "stacks": 1,
+        "resisted": false,
+        "refreshed": false
       }
     },
     {
-      "t": 0,
+      "t": 0.40000003576278687,
       "type": "StatModified",
-      "canonical": "modifyStat E1 CritChance pct=40 dur=2",
+      "canonical": "modifyStat E2 CritChance pct=50 dur=5",
       "payload": {
-        "target": 1,
+        "target": 2,
         "statKind": "CritChance",
         "statElement": null,
-        "amountPct": 40,
-        "duration": 2
+        "amountPct": 50,
+        "duration": 5
+      }
+    },
+    {
+      "t": 5.400002479553223,
+      "type": "StatusRemoved",
+      "canonical": "statusRemoved E2 Blind",
+      "payload": {
+        "target": 2,
+        "status": "Blind"
       }
     }
   ]

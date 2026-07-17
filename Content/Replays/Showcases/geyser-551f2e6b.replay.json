@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "steam",
+    "kitA": "geyser",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/steam.record.json",
+    "kitAPath": "arena/fusions/geyser-551f2e6b.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -17,7 +17,7 @@
     "entities": [
       {
         "id": 1,
-        "name": "steam",
+        "name": "geyser",
         "maxHp": 1600,
         "spawn": {
           "x": 0,
@@ -43,20 +43,20 @@
     {
       "t": 0.40000003576278687,
       "type": "CastStarted",
-      "canonical": "cast E1 steam",
+      "canonical": "cast E1 geyser",
       "payload": {
         "caster": 1,
-        "spell": "steam"
+        "spell": "geyser"
       }
     },
     {
       "t": 0.40000003576278687,
       "type": "DamageDealt",
-      "canonical": "damage E2 amt=153.6 Air crit=False killed=False absorbed=0",
+      "canonical": "damage E2 amt=140.8 Water crit=False killed=False absorbed=0",
       "payload": {
         "target": 2,
-        "amount": 153.60000610351562,
-        "element": "Air",
+        "amount": 140.8000030517578,
+        "element": "Water",
         "crit": false,
         "killed": false,
         "absorbed": 0,
@@ -77,12 +77,32 @@
       }
     },
     {
+      "t": 0.40000003576278687,
+      "type": "Displaced",
+      "canonical": "displace E2 Push to=(14,0,0) blocked=False",
+      "payload": {
+        "subject": 2,
+        "mode": "Push",
+        "from": {
+          "x": 8,
+          "y": 0,
+          "z": 0
+        },
+        "to": {
+          "x": 14,
+          "y": 0,
+          "z": 0
+        },
+        "blocked": false
+      }
+    },
+    {
       "t": 0.9000001549720764,
       "type": "DamageDealt",
-      "canonical": "damage E2 amt=102.4 Fire crit=False killed=False absorbed=0",
+      "canonical": "damage E2 amt=64 Fire crit=False killed=False absorbed=0",
       "payload": {
         "target": 2,
-        "amount": 102.4000015258789,
+        "amount": 64,
         "element": "Fire",
         "crit": false,
         "killed": false,
@@ -93,10 +113,10 @@
     {
       "t": 1.399999737739563,
       "type": "DamageDealt",
-      "canonical": "damage E2 amt=102.4 Fire crit=False killed=False absorbed=0",
+      "canonical": "damage E2 amt=64 Fire crit=False killed=False absorbed=0",
       "payload": {
         "target": 2,
-        "amount": 102.4000015258789,
+        "amount": 64,
         "element": "Fire",
         "crit": false,
         "killed": false,
@@ -107,10 +127,10 @@
     {
       "t": 1.8999992609024048,
       "type": "DamageDealt",
-      "canonical": "damage E2 amt=102.4 Fire crit=False killed=False absorbed=0",
+      "canonical": "damage E2 amt=64 Fire crit=False killed=False absorbed=0",
       "payload": {
         "target": 2,
-        "amount": 102.4000015258789,
+        "amount": 64,
         "element": "Fire",
         "crit": false,
         "killed": false,
@@ -121,10 +141,10 @@
     {
       "t": 2.399998903274536,
       "type": "DamageDealt",
-      "canonical": "damage E2 amt=102.4 Fire crit=False killed=False absorbed=0",
+      "canonical": "damage E2 amt=64 Fire crit=False killed=False absorbed=0",
       "payload": {
         "target": 2,
-        "amount": 102.4000015258789,
+        "amount": 64,
         "element": "Fire",
         "crit": false,
         "killed": false,

@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "penumbra",
+    "kitA": "bramble",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/penumbra.record.json",
+    "kitAPath": "fixtures/anchors/bramble.seed.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -11,14 +11,14 @@
       "mana": 10000,
       "amplifyMajor": 2.5
     },
-    "durationSeconds": 6.400006294250488,
+    "durationSeconds": 6.000004768371582,
     "winner": "draw",
     "endReason": "quiescent",
     "entities": [
       {
         "id": 1,
-        "name": "penumbra",
-        "maxHp": 1600,
+        "name": "bramble",
+        "maxHp": 1000,
         "spawn": {
           "x": 0,
           "y": 0,
@@ -28,7 +28,7 @@
       {
         "id": 2,
         "name": "dummy",
-        "maxHp": 1600,
+        "maxHp": 1000,
         "spawn": {
           "x": 8,
           "y": 0,
@@ -41,21 +41,21 @@
   },
   "events": [
     {
-      "t": 0.40000003576278687,
+      "t": 0,
       "type": "CastStarted",
-      "canonical": "cast E1 penumbra",
+      "canonical": "cast E1 bramble",
       "payload": {
         "caster": 1,
-        "spell": "penumbra"
+        "spell": "bramble"
       }
     },
     {
-      "t": 0.40000003576278687,
+      "t": 0,
       "type": "StatusApplied",
-      "canonical": "status E1 Stealth dur=5 stacks=1 refreshed=False",
+      "canonical": "status E2 Root dur=5 stacks=1 refreshed=False",
       "payload": {
-        "target": 1,
-        "status": "Stealth",
+        "target": 2,
+        "status": "Root",
         "duration": 5,
         "stacks": 1,
         "resisted": false,
@@ -63,24 +63,26 @@
       }
     },
     {
-      "t": 0.40000003576278687,
-      "type": "StatModified",
-      "canonical": "modifyStat E1 CritChance pct=50 dur=5",
+      "t": 0,
+      "type": "DamageDealt",
+      "canonical": "damage E2 amt=42.5 Nature crit=False killed=False absorbed=0",
       "payload": {
-        "target": 1,
-        "statKind": "CritChance",
-        "statElement": null,
-        "amountPct": 50,
-        "duration": 5
+        "target": 2,
+        "amount": 42.5,
+        "element": "Nature",
+        "crit": false,
+        "killed": false,
+        "absorbed": 0,
+        "evaded": false
       }
     },
     {
-      "t": 5.400002479553223,
+      "t": 5.000000953674316,
       "type": "StatusRemoved",
-      "canonical": "statusRemoved E1 Stealth",
+      "canonical": "statusRemoved E2 Root",
       "payload": {
-        "target": 1,
-        "status": "Stealth"
+        "target": 2,
+        "status": "Root"
       }
     }
   ]

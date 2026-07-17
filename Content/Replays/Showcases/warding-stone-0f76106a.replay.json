@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "beacon",
+    "kitA": "warding-stone",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/beacon.record.json",
+    "kitAPath": "arena/fusions/warding-stone-0f76106a.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -17,7 +17,7 @@
     "entities": [
       {
         "id": 1,
-        "name": "beacon",
+        "name": "warding-stone",
         "maxHp": 1600,
         "spawn": {
           "x": 0,
@@ -43,58 +43,44 @@
     {
       "t": 0.40000003576278687,
       "type": "CastStarted",
-      "canonical": "cast E1 beacon",
+      "canonical": "cast E1 warding-stone",
       "payload": {
         "caster": 1,
-        "spell": "beacon"
+        "spell": "warding-stone"
       }
     },
     {
       "t": 0.40000003576278687,
-      "type": "DamageDealt",
-      "canonical": "damage E2 amt=80 Fire crit=False killed=False absorbed=0",
+      "type": "ShieldGranted",
+      "canonical": "shield E1 amt=76.8 dur=5",
       "payload": {
-        "target": 2,
-        "amount": 80,
-        "element": "Fire",
-        "crit": false,
-        "killed": false,
-        "absorbed": 0,
-        "evaded": false
-      }
-    },
-    {
-      "t": 0.40000003576278687,
-      "type": "StatModified",
-      "canonical": "modifyStat E2 CritChance pct=30 dur=5",
-      "payload": {
-        "target": 2,
-        "statKind": "CritChance",
-        "statElement": null,
-        "amountPct": 30.000001907348633,
+        "target": 1,
+        "amount": 76.80000305175781,
         "duration": 5
       }
     },
     {
       "t": 0.40000003576278687,
-      "type": "StatusApplied",
-      "canonical": "status E2 Vulnerable dur=5 stacks=1 refreshed=False",
+      "type": "StatModified",
+      "canonical": "modifyStat E1 CritChance pct=25 dur=5",
       "payload": {
-        "target": 2,
-        "status": "Vulnerable",
-        "duration": 5,
-        "stacks": 1,
-        "resisted": false,
-        "refreshed": false
+        "target": 1,
+        "statKind": "CritChance",
+        "statElement": null,
+        "amountPct": 25,
+        "duration": 5
       }
     },
     {
-      "t": 5.400002479553223,
-      "type": "StatusRemoved",
-      "canonical": "statusRemoved E2 Vulnerable",
+      "t": 0.40000003576278687,
+      "type": "StatModified",
+      "canonical": "modifyStat E1 Armor pct=15 dur=5",
       "payload": {
-        "target": 2,
-        "status": "Vulnerable"
+        "target": 1,
+        "statKind": "Armor",
+        "statElement": null,
+        "amountPct": 15.000000953674316,
+        "duration": 5
       }
     }
   ]

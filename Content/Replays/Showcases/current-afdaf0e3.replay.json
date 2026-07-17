@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "murk",
+    "kitA": "current",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/murk.record.json",
+    "kitAPath": "arena/fusions/current-afdaf0e3.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -11,13 +11,13 @@
       "mana": 10000,
       "amplifyMajor": 2.5
     },
-    "durationSeconds": 6.000004768371582,
+    "durationSeconds": 6.8000078201293945,
     "winner": "draw",
     "endReason": "quiescent",
     "entities": [
       {
         "id": 1,
-        "name": "murk",
+        "name": "current",
         "maxHp": 1600,
         "spawn": {
           "x": 0,
@@ -41,41 +41,38 @@
   },
   "events": [
     {
-      "t": 0,
+      "t": 0.8000001311302185,
       "type": "CastStarted",
-      "canonical": "cast E1 murk",
+      "canonical": "cast E1 current",
       "payload": {
         "caster": 1,
-        "spell": "murk"
+        "spell": "current"
       }
     },
     {
-      "t": 0,
-      "type": "StatusApplied",
-      "canonical": "status E2 Blind dur=5 stacks=1 refreshed=False",
+      "t": 0.8000001311302185,
+      "type": "Healed",
+      "canonical": "heal E2 eff=0 over=88",
       "payload": {
         "target": 2,
-        "status": "Blind",
-        "duration": 5,
-        "stacks": 1,
-        "resisted": false,
-        "refreshed": false
+        "effective": 0,
+        "overheal": 88
       }
     },
     {
-      "t": 0,
+      "t": 0.8000001311302185,
       "type": "Displaced",
-      "canonical": "displace E2 Push to=(11,0,0) blocked=False",
+      "canonical": "displace E2 Pull to=(8,0,0) blocked=False",
       "payload": {
         "subject": 2,
-        "mode": "Push",
+        "mode": "Pull",
         "from": {
           "x": 8,
           "y": 0,
           "z": 0
         },
         "to": {
-          "x": 11,
+          "x": 8,
           "y": 0,
           "z": 0
         },
@@ -83,24 +80,25 @@
       }
     },
     {
-      "t": 0,
-      "type": "StatModified",
-      "canonical": "modifyStat E2 MoveSpeed pct=-25 dur=5",
+      "t": 0.8000001311302185,
+      "type": "StatusApplied",
+      "canonical": "status E2 Slow dur=5 stacks=1 refreshed=False",
       "payload": {
         "target": 2,
-        "statKind": "MoveSpeed",
-        "statElement": null,
-        "amountPct": -25,
-        "duration": 5
+        "status": "Slow",
+        "duration": 5,
+        "stacks": 1,
+        "resisted": false,
+        "refreshed": false
       }
     },
     {
-      "t": 5.000000953674316,
+      "t": 5.800004005432129,
       "type": "StatusRemoved",
-      "canonical": "statusRemoved E2 Blind",
+      "canonical": "statusRemoved E2 Slow",
       "payload": {
         "target": 2,
-        "status": "Blind"
+        "status": "Slow"
       }
     }
   ]

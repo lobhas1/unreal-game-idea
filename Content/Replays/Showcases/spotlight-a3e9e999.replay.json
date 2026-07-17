@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "dewdrop-lens",
+    "kitA": "spotlight",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/dewdrop-lens.record.json",
+    "kitAPath": "arena/fusions/spotlight-a3e9e999.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -17,7 +17,7 @@
     "entities": [
       {
         "id": 1,
-        "name": "dewdrop-lens",
+        "name": "spotlight",
         "maxHp": 1600,
         "spawn": {
           "x": 0,
@@ -43,44 +43,58 @@
     {
       "t": 0.40000003576278687,
       "type": "CastStarted",
-      "canonical": "cast E1 dewdrop-lens",
+      "canonical": "cast E1 spotlight",
       "payload": {
         "caster": 1,
-        "spell": "dewdrop-lens"
+        "spell": "spotlight"
       }
     },
     {
       "t": 0.40000003576278687,
-      "type": "Healed",
-      "canonical": "heal E1 eff=0 over=64",
+      "type": "DamageDealt",
+      "canonical": "damage E2 amt=88 Light crit=False killed=False absorbed=0",
       "payload": {
-        "target": 1,
-        "effective": 0,
-        "overheal": 64
+        "target": 2,
+        "amount": 88,
+        "element": "Light",
+        "crit": false,
+        "killed": false,
+        "absorbed": 0,
+        "evaded": false
       }
     },
     {
       "t": 0.40000003576278687,
       "type": "StatModified",
-      "canonical": "modifyStat E1 CritChance pct=30 dur=5",
+      "canonical": "modifyStat E2 CritChance pct=25 dur=5",
       "payload": {
-        "target": 1,
+        "target": 2,
         "statKind": "CritChance",
         "statElement": null,
-        "amountPct": 30.000001907348633,
+        "amountPct": 25,
         "duration": 5
       }
     },
     {
       "t": 0.40000003576278687,
-      "type": "StatModified",
-      "canonical": "modifyStat E1 Evasion pct=20 dur=5",
+      "type": "StatusApplied",
+      "canonical": "status E2 Blind dur=2 stacks=1 refreshed=False",
       "payload": {
-        "target": 1,
-        "statKind": "Evasion",
-        "statElement": null,
-        "amountPct": 20,
-        "duration": 5
+        "target": 2,
+        "status": "Blind",
+        "duration": 2,
+        "stacks": 1,
+        "resisted": false,
+        "refreshed": false
+      }
+    },
+    {
+      "t": 2.399998903274536,
+      "type": "StatusRemoved",
+      "canonical": "statusRemoved E2 Blind",
+      "payload": {
+        "target": 2,
+        "status": "Blind"
       }
     }
   ]

@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "mist",
+    "kitA": "beacon",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/mist.record.json",
+    "kitAPath": "arena/fusions/beacon-dc117147.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -11,13 +11,13 @@
       "mana": 10000,
       "amplifyMajor": 2.5
     },
-    "durationSeconds": 6.000004768371582,
+    "durationSeconds": 11.400025367736816,
     "winner": "draw",
     "endReason": "quiescent",
     "entities": [
       {
         "id": 1,
-        "name": "mist",
+        "name": "beacon",
         "maxHp": 1600,
         "spawn": {
           "x": 0,
@@ -41,18 +41,18 @@
   },
   "events": [
     {
-      "t": 0,
+      "t": 0.40000003576278687,
       "type": "CastStarted",
-      "canonical": "cast E1 mist",
+      "canonical": "cast E1 beacon",
       "payload": {
         "caster": 1,
-        "spell": "mist"
+        "spell": "beacon"
       }
     },
     {
-      "t": 0,
+      "t": 0.40000003576278687,
       "type": "ZoneSpawned",
-      "canonical": "zoneSpawned Z1 Circle r=6 dur=5",
+      "canonical": "zoneSpawned Z1 Circle r=6 dur=10",
       "payload": {
         "id": 1,
         "center": {
@@ -62,11 +62,11 @@
         },
         "shape": "Circle",
         "size": 6,
-        "duration": 5
+        "duration": 10
       }
     },
     {
-      "t": 0.5000000596046448,
+      "t": 1.399999737739563,
       "type": "ZoneTicked",
       "canonical": "zoneTick Z1 affected=0",
       "payload": {
@@ -75,7 +75,7 @@
       }
     },
     {
-      "t": 1.0000001192092896,
+      "t": 2.399998903274536,
       "type": "ZoneTicked",
       "canonical": "zoneTick Z1 affected=0",
       "payload": {
@@ -84,7 +84,7 @@
       }
     },
     {
-      "t": 1.4999996423721313,
+      "t": 3.3999979496002197,
       "type": "ZoneTicked",
       "canonical": "zoneTick Z1 affected=0",
       "payload": {
@@ -93,7 +93,7 @@
       }
     },
     {
-      "t": 1.9999991655349731,
+      "t": 4.399998664855957,
       "type": "ZoneTicked",
       "canonical": "zoneTick Z1 affected=0",
       "payload": {
@@ -102,7 +102,7 @@
       }
     },
     {
-      "t": 2.4999988079071045,
+      "t": 5.400002479553223,
       "type": "ZoneTicked",
       "canonical": "zoneTick Z1 affected=0",
       "payload": {
@@ -111,7 +111,7 @@
       }
     },
     {
-      "t": 2.9999983310699463,
+      "t": 6.400006294250488,
       "type": "ZoneTicked",
       "canonical": "zoneTick Z1 affected=0",
       "payload": {
@@ -120,7 +120,7 @@
       }
     },
     {
-      "t": 3.499997854232788,
+      "t": 7.400010108947754,
       "type": "ZoneTicked",
       "canonical": "zoneTick Z1 affected=0",
       "payload": {
@@ -129,7 +129,7 @@
       }
     },
     {
-      "t": 3.99999737739563,
+      "t": 8.40001392364502,
       "type": "ZoneTicked",
       "canonical": "zoneTick Z1 affected=0",
       "payload": {
@@ -138,7 +138,7 @@
       }
     },
     {
-      "t": 4.499999046325684,
+      "t": 9.400017738342285,
       "type": "ZoneTicked",
       "canonical": "zoneTick Z1 affected=0",
       "payload": {
@@ -147,7 +147,7 @@
       }
     },
     {
-      "t": 5.000000953674316,
+      "t": 10.40002155303955,
       "type": "ZoneTicked",
       "canonical": "zoneTick Z1 affected=0",
       "payload": {
@@ -156,7 +156,7 @@
       }
     },
     {
-      "t": 5.000000953674316,
+      "t": 10.40002155303955,
       "type": "ZoneExpired",
       "canonical": "zoneExpired Z1",
       "payload": {

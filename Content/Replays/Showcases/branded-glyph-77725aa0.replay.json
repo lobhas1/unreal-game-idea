@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "mudstone-mirror",
+    "kitA": "branded-glyph",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/mudstone-mirror.record.json",
+    "kitAPath": "arena/fusions/branded-glyph-77725aa0.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -11,14 +11,14 @@
       "mana": 10000,
       "amplifyMajor": 2.5
     },
-    "durationSeconds": 11.800026893615723,
+    "durationSeconds": 6.400006294250488,
     "winner": "draw",
     "endReason": "quiescent",
     "entities": [
       {
         "id": 1,
-        "name": "mudstone-mirror",
-        "maxHp": 2560.000244140625,
+        "name": "branded-glyph",
+        "maxHp": 1600,
         "spawn": {
           "x": 0,
           "y": 0,
@@ -28,7 +28,7 @@
       {
         "id": 2,
         "name": "dummy",
-        "maxHp": 2560.000244140625,
+        "maxHp": 1600,
         "spawn": {
           "x": 8,
           "y": 0,
@@ -41,45 +41,33 @@
   },
   "events": [
     {
-      "t": 0.8000001311302185,
+      "t": 0.40000003576278687,
       "type": "CastStarted",
-      "canonical": "cast E1 mudstone-mirror",
+      "canonical": "cast E1 branded-glyph",
       "payload": {
         "caster": 1,
-        "spell": "mudstone-mirror"
+        "spell": "branded-glyph"
       }
     },
     {
-      "t": 0.8000001311302185,
+      "t": 0.40000003576278687,
       "type": "ShieldGranted",
-      "canonical": "shield E1 amt=92.16 dur=10",
+      "canonical": "shield E1 amt=44.8 dur=5",
       "payload": {
         "target": 1,
-        "amount": 92.1600112915039,
-        "duration": 10
+        "amount": 44.79999923706055,
+        "duration": 5
       }
     },
     {
-      "t": 0.8000001311302185,
+      "t": 0.40000003576278687,
       "type": "StatModified",
-      "canonical": "modifyStat E1 Evasion pct=30 dur=10",
-      "payload": {
-        "target": 1,
-        "statKind": "Evasion",
-        "statElement": null,
-        "amountPct": 30.000001907348633,
-        "duration": 10
-      }
-    },
-    {
-      "t": 0.8000001311302185,
-      "type": "StatModified",
-      "canonical": "modifyStat E1 CritChance pct=25 dur=5",
+      "canonical": "modifyStat E1 CritChance pct=20 dur=5",
       "payload": {
         "target": 1,
         "statKind": "CritChance",
         "statElement": null,
-        "amountPct": 25,
+        "amountPct": 20,
         "duration": 5
       }
     }

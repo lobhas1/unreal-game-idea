@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "hearthstone",
+    "kitA": "inscription",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/hearthstone.record.json",
+    "kitAPath": "arena/fusions/inscription-d13637d6.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -17,8 +17,8 @@
     "entities": [
       {
         "id": 1,
-        "name": "hearthstone",
-        "maxHp": 2560.000244140625,
+        "name": "inscription",
+        "maxHp": 1600,
         "spawn": {
           "x": 0,
           "y": 0,
@@ -28,7 +28,7 @@
       {
         "id": 2,
         "name": "dummy",
-        "maxHp": 2560.000244140625,
+        "maxHp": 1600,
         "spawn": {
           "x": 8,
           "y": 0,
@@ -43,42 +43,32 @@
     {
       "t": 0.8000001311302185,
       "type": "CastStarted",
-      "canonical": "cast E1 hearthstone",
+      "canonical": "cast E1 inscription",
       "payload": {
         "caster": 1,
-        "spell": "hearthstone"
+        "spell": "inscription"
       }
     },
     {
       "t": 0.8000001311302185,
       "type": "ShieldGranted",
-      "canonical": "shield E1 amt=81.92 dur=10",
+      "canonical": "shield E1 amt=70.4 dur=10",
       "payload": {
         "target": 1,
-        "amount": 81.92001342773438,
+        "amount": 70.4000015258789,
         "duration": 10
       }
     },
     {
       "t": 0.8000001311302185,
-      "type": "StatusApplied",
-      "canonical": "status E1 Stealth dur=5 stacks=1 refreshed=False",
+      "type": "StatModified",
+      "canonical": "modifyStat E1 CritChance pct=45 dur=10",
       "payload": {
         "target": 1,
-        "status": "Stealth",
-        "duration": 5,
-        "stacks": 1,
-        "resisted": false,
-        "refreshed": false
-      }
-    },
-    {
-      "t": 5.800004005432129,
-      "type": "StatusRemoved",
-      "canonical": "statusRemoved E1 Stealth",
-      "payload": {
-        "target": 1,
-        "status": "Stealth"
+        "statKind": "CritChance",
+        "statElement": null,
+        "amountPct": 45,
+        "duration": 10
       }
     }
   ]

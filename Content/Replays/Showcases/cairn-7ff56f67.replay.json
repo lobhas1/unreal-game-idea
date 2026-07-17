@@ -3,7 +3,7 @@
   "header": {
     "kitA": "cairn",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/cairn-2184858c.record.json",
+    "kitAPath": "arena/fusions/cairn-7ff56f67.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -11,7 +11,7 @@
       "mana": 10000,
       "amplifyMajor": 2.5
     },
-    "durationSeconds": 11.400025367736816,
+    "durationSeconds": 6.8000078201293945,
     "winner": "draw",
     "endReason": "quiescent",
     "entities": [
@@ -41,7 +41,7 @@
   },
   "events": [
     {
-      "t": 0.40000003576278687,
+      "t": 0.8000001311302185,
       "type": "CastStarted",
       "canonical": "cast E1 cairn",
       "payload": {
@@ -50,25 +50,35 @@
       }
     },
     {
-      "t": 0.40000003576278687,
+      "t": 0.8000001311302185,
       "type": "ShieldGranted",
-      "canonical": "shield E1 amt=76.8 dur=10",
+      "canonical": "shield E1 amt=70.4 dur=5",
       "payload": {
         "target": 1,
-        "amount": 76.80000305175781,
-        "duration": 10
+        "amount": 70.4000015258789,
+        "duration": 5
       }
     },
     {
-      "t": 0.40000003576278687,
-      "type": "StatModified",
-      "canonical": "modifyStat E1 CritChance pct=40 dur=10",
+      "t": 0.8000001311302185,
+      "type": "StatusApplied",
+      "canonical": "status E1 Stealth dur=5 stacks=1 refreshed=False",
       "payload": {
         "target": 1,
-        "statKind": "CritChance",
-        "statElement": null,
-        "amountPct": 40,
-        "duration": 10
+        "status": "Stealth",
+        "duration": 5,
+        "stacks": 1,
+        "resisted": false,
+        "refreshed": false
+      }
+    },
+    {
+      "t": 5.800004005432129,
+      "type": "StatusRemoved",
+      "canonical": "statusRemoved E1 Stealth",
+      "payload": {
+        "target": 1,
+        "status": "Stealth"
       }
     }
   ]

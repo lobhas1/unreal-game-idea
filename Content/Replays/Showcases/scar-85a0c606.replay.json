@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "cairn",
+    "kitA": "scar",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/cairn-2184858c.record.json",
+    "kitAPath": "arena/fusions/scar-85a0c606.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -17,7 +17,7 @@
     "entities": [
       {
         "id": 1,
-        "name": "cairn",
+        "name": "scar",
         "maxHp": 1600,
         "spawn": {
           "x": 0,
@@ -43,31 +43,41 @@
     {
       "t": 0.40000003576278687,
       "type": "CastStarted",
-      "canonical": "cast E1 cairn",
+      "canonical": "cast E1 scar",
       "payload": {
         "caster": 1,
-        "spell": "cairn"
+        "spell": "scar"
+      }
+    },
+    {
+      "t": 0.40000003576278687,
+      "type": "Healed",
+      "canonical": "heal E1 eff=0 over=57.6",
+      "payload": {
+        "target": 1,
+        "effective": 0,
+        "overheal": 57.60000228881836
       }
     },
     {
       "t": 0.40000003576278687,
       "type": "ShieldGranted",
-      "canonical": "shield E1 amt=76.8 dur=10",
+      "canonical": "shield E1 amt=51.2 dur=10",
       "payload": {
         "target": 1,
-        "amount": 76.80000305175781,
+        "amount": 51.20000076293945,
         "duration": 10
       }
     },
     {
       "t": 0.40000003576278687,
       "type": "StatModified",
-      "canonical": "modifyStat E1 CritChance pct=40 dur=10",
+      "canonical": "modifyStat E1 Armor pct=15 dur=10",
       "payload": {
         "target": 1,
-        "statKind": "CritChance",
+        "statKind": "Armor",
         "statElement": null,
-        "amountPct": 40,
+        "amountPct": 15.000000953674316,
         "duration": 10
       }
     }

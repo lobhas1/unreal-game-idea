@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "cairn",
+    "kitA": "dew",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/cairn-2184858c.record.json",
+    "kitAPath": "arena/fusions/dew-ef602d14.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -11,13 +11,13 @@
       "mana": 10000,
       "amplifyMajor": 2.5
     },
-    "durationSeconds": 11.400025367736816,
+    "durationSeconds": 6.000004768371582,
     "winner": "draw",
     "endReason": "quiescent",
     "entities": [
       {
         "id": 1,
-        "name": "cairn",
+        "name": "dew",
         "maxHp": 1600,
         "spawn": {
           "x": 0,
@@ -41,34 +41,34 @@
   },
   "events": [
     {
-      "t": 0.40000003576278687,
+      "t": 0,
       "type": "CastStarted",
-      "canonical": "cast E1 cairn",
+      "canonical": "cast E1 dew",
       "payload": {
         "caster": 1,
-        "spell": "cairn"
+        "spell": "dew"
       }
     },
     {
-      "t": 0.40000003576278687,
-      "type": "ShieldGranted",
-      "canonical": "shield E1 amt=76.8 dur=10",
+      "t": 0,
+      "type": "Healed",
+      "canonical": "heal E2 eff=0 over=81.6",
       "payload": {
-        "target": 1,
-        "amount": 76.80000305175781,
-        "duration": 10
+        "target": 2,
+        "effective": 0,
+        "overheal": 81.60000610351562
       }
     },
     {
-      "t": 0.40000003576278687,
+      "t": 0,
       "type": "StatModified",
-      "canonical": "modifyStat E1 CritChance pct=40 dur=10",
+      "canonical": "modifyStat E2 CritChance pct=40 dur=5",
       "payload": {
-        "target": 1,
+        "target": 2,
         "statKind": "CritChance",
         "statElement": null,
         "amountPct": 40,
-        "duration": 10
+        "duration": 5
       }
     }
   ]

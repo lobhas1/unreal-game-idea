@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "header": {
-    "kitA": "cairn",
+    "kitA": "seagrass",
     "kitB": "dummy",
-    "kitAPath": "arena/fusions/cairn-2184858c.record.json",
+    "kitAPath": "arena/fusions/seagrass-d0bb75b2.record.json",
     "kitBPath": "dummy",
     "seed": 1,
     "config": {
@@ -17,7 +17,7 @@
     "entities": [
       {
         "id": 1,
-        "name": "cairn",
+        "name": "seagrass",
         "maxHp": 1600,
         "spawn": {
           "x": 0,
@@ -43,32 +43,44 @@
     {
       "t": 0.40000003576278687,
       "type": "CastStarted",
-      "canonical": "cast E1 cairn",
+      "canonical": "cast E1 seagrass",
       "payload": {
         "caster": 1,
-        "spell": "cairn"
+        "spell": "seagrass"
       }
     },
     {
       "t": 0.40000003576278687,
-      "type": "ShieldGranted",
-      "canonical": "shield E1 amt=76.8 dur=10",
+      "type": "StatusApplied",
+      "canonical": "status E2 Root dur=10 stacks=1 refreshed=False",
       "payload": {
-        "target": 1,
-        "amount": 76.80000305175781,
-        "duration": 10
+        "target": 2,
+        "status": "Root",
+        "duration": 10,
+        "stacks": 1,
+        "resisted": false,
+        "refreshed": false
       }
     },
     {
       "t": 0.40000003576278687,
       "type": "StatModified",
-      "canonical": "modifyStat E1 CritChance pct=40 dur=10",
+      "canonical": "modifyStat E2 MoveSpeed pct=-40 dur=10",
       "payload": {
-        "target": 1,
-        "statKind": "CritChance",
+        "target": 2,
+        "statKind": "MoveSpeed",
         "statElement": null,
-        "amountPct": 40,
+        "amountPct": -40,
         "duration": 10
+      }
+    },
+    {
+      "t": 10.40002155303955,
+      "type": "StatusRemoved",
+      "canonical": "statusRemoved E2 Root",
+      "payload": {
+        "target": 2,
+        "status": "Root"
       }
     }
   ]
