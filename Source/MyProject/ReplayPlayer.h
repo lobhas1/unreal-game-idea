@@ -32,6 +32,12 @@ class UAnimSequence;
  *  Self; a ZoneSpawned in the cast group => GroundAoE. */
 enum class EReplayDelivery : uint8 { None, Projectile, Self, GroundAoE };
 
+/** Cast intent, discovered from the resolving effects (Law 2), used to pick a per-verb cast animation
+ *  that OVERRIDES the delivery-based archetype: a shield/ward reads as a guard, a heal as a heal, a
+ *  self-displace as a dash - never as an attack. Priority shield > heal > mobility; else Generic
+ *  (delivery decides). Purely presentational, like delivery. */
+enum class EReplayCastVerb : uint8 { Generic, Shield, HealSelf, HealTarget, Mobility };
+
 /** One recorded event. Non-reflected: holds the raw payload for rendering and,
  *  crucially, the canonical projection string that the replay file already
  *  provides. We NEVER re-serialize the payload into a projection line - we echo
@@ -46,6 +52,7 @@ struct FReplayEvent
 	// Delivery resolution (populated by ClassifyDeliveries for CastStarted events only,
 	// from the following events up to the next cast - purely descriptive, no combat logic).
 	EReplayDelivery Delivery = EReplayDelivery::None;
+	EReplayCastVerb CastVerb = EReplayCastVerb::Generic; // per-verb animation intent (shield/heal/mobility)
 	int32 CasterId = 0;
 	int32 EffectTargetId = 0;
 	double EffectT = 0.0;          // time of the resolving effect event (== T for hitscan)

@@ -435,6 +435,26 @@ void AReplayPlayer::ClassifyDeliveries()
 			}
 		}
 	}
+
+	// Second pass - per-verb intent (for per-verb cast animation; overrides delivery in PlayCastArchetype).
+	// Scans each cast's group: priority shield > heal > self-mobility; else Generic. Stream-only, no state.
+	for (int32 i = 0; i < Events.Num(); ++i)
+	{
+		if (Events[i].Type != TEXT("CastStarted")) { continue; }
+		const int32 Caster = Events[i].CasterId;
+		bool bShield = false, bHeal = false, bSelfDisplace = false; int32 HealTgt = -1;
+		for (int32 j = i + 1; j < Events.Num() && Events[j].Type != TEXT("CastStarted"); ++j)
+		{
+			const FString& T = Events[j].Type;
+			const TSharedPtr<FJsonObject>& JP = Events[j].Payload;
+			if (T == TEXT("ShieldGranted")) { bShield = true; }
+			else if (T == TEXT("Healed")) { bHeal = true; if (HealTgt < 0) { HealTgt = NumField(JP, TEXT("target"), -1); } }
+			else if (T == TEXT("Displaced") && NumField(JP, TEXT("subject"), -1) == Caster) { bSelfDisplace = true; }
+		}
+		if (bShield)            { Events[i].CastVerb = EReplayCastVerb::Shield; }
+		else if (bHeal)         { Events[i].CastVerb = (HealTgt == Caster) ? EReplayCastVerb::HealSelf : EReplayCastVerb::HealTarget; }
+		else if (bSelfDisplace) { Events[i].CastVerb = EReplayCastVerb::Mobility; }
+	}
 }
 
 FVector AReplayPlayer::SimToWorld(const FVector& Sim) const
@@ -830,7 +850,7 @@ void AReplayPlayer::Tick(float DeltaSeconds)
 			++StackN;
 			if (G.bRisingMotes && SimTime >= AS.NextMoteSim)
 			{
-				SpawnVerbFX(HealFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), FString(), 0.5f);
+				SpawnVerbFX(HealFX, SocketWorld(*E, TEXT("spine_03"), SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f)), FString(), 0.5f); // Step D: regen mote rises from the chest bone
 				AS.NextMoteSim = SimTime + kRegenMoteInterval;
 			}
 		}
@@ -941,7 +961,54 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 	UAnimSequenceBase* Anim = nullptr; // sequence or runtime composite to play
 	float Len = 0.f;                   // its timeline length (composite: accumulated; sequence: play length)
 
-	if (Cast.Delivery == EReplayDelivery::GroundAoE)
+	// VERB-FIRST: shield/heal/mobility read by INTENT and OVERRIDE the delivery archetype - a targeted
+	// heal is Projectile delivery but must read as a heal, not a throw; a shield must read as a guard.
+	// Per-verb clips chosen by in-editor thumbnail eval (filed in docs/act1-plan.md).
+	if (Cast.CastVerb == EReplayCastVerb::Shield)
+	{
+		// WARD = Defend Start + looped Defend Maintain (raised guard), window-sized like the channel.
+		UAnimSequence* DS = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/DefendStartAnim.DefendStartAnim"));
+		UAnimSequence* DM = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/DefendMaintainAnim.DefendMaintainAnim"));
+		if (Skel && DS)
+		{
+			const float StartLen = DS->GetPlayLength();
+			const float MaintLen = DM ? DM->GetPlayLength() : 0.f;
+			int32 Loops = 0;
+			if (DM && MaintLen > KINDA_SMALL_NUMBER && (double)StartLen < Window)
+			{
+				Loops = FMath::Clamp(FMath::RoundToInt(((float)Window - StartLen) / MaintLen), 0, 64);
+			}
+			UAnimComposite* C = NewObject<UAnimComposite>(this);
+			C->SetSkeleton(Skel);
+			float Cursor = 0.f;
+			AddSeg(C, Cursor, DS, 1);
+			if (Loops > 0) { AddSeg(C, Cursor, DM, Loops); }
+			if (C->AnimationTrack.AnimSegments.Num() > 0) { C->SetCompositeLength(Cursor); Anim = C; Len = Cursor; }
+		}
+		if (!Anim && DS) { Anim = DS; Len = DS->GetPlayLength(); }
+	}
+	else if (Cast.CastVerb == EReplayCastVerb::HealSelf)
+	{
+		if (UAnimSequence* P = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/PotionDrinkAnim.PotionDrinkAnim"))) { Anim = P; Len = P->GetPlayLength(); } // drink a potion
+	}
+	else if (Cast.CastVerb == EReplayCastVerb::HealTarget)
+	{
+		if (UAnimSequence* I = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/InteractAnim.InteractAnim"))) { Anim = I; Len = I->GetPlayLength(); } // forward bestow gesture
+	}
+	else if (Cast.CastVerb == EReplayCastVerb::Mobility)
+	{
+		if (UAnimSequence* R = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/BattleRunForwardAnim.BattleRunForwardAnim"))) { Anim = R; Len = R->GetPlayLength(); } // dash/step; body lerps to the displaced position
+	}
+	// Heal fallback: softened Attack02 channel if the heal clip failed to load - never a wrong-but-loud read.
+	if (!Anim && (Cast.CastVerb == EReplayCastVerb::HealSelf || Cast.CastVerb == EReplayCastVerb::HealTarget) && ChannelAnim)
+	{
+		Anim = ChannelAnim; Len = ChannelAnim->GetPlayLength();
+	}
+
+	// DELIVERY-based archetype (generic verbs only; each branch guarded by !Anim so a resolved verb clip
+	// above wins). The event-given window drives play-rate / Maintain loop count; delivery-first among
+	// the generics so slam/channel/throw differentiate (the corpus models most casts with a ~0 window).
+	if (!Anim && Cast.Delivery == EReplayDelivery::GroundAoE)
 	{
 		// SLAM = leap-slam composite (chibi-bold): JumpUpAttack -> JumpAirAttack -> JumpEnd.
 		UAnimSequence* Up  = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/JumpUpAttackAnim.JumpUpAttackAnim"));
@@ -963,7 +1030,7 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 		}
 		if (!Anim && SlamAnim) { Anim = SlamAnim; Len = SlamAnim->GetPlayLength(); } // single-clip fallback
 	}
-	else if (Cast.Delivery == EReplayDelivery::Self)
+	else if (!Anim && Cast.Delivery == EReplayDelivery::Self)
 	{
 		// CHANNEL = Attack02 Start + looped Attack02 Maintain, sized to fill the cast->effect window.
 		// Looping is the lawful fit for LONG windows (natural-speed Maintain repeats); SHORT windows
@@ -992,11 +1059,11 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 		}
 		if (!Anim && ChannelAnim) { Anim = ChannelAnim; Len = ChannelAnim->GetPlayLength(); }
 	}
-	else if (Cast.Delivery == EReplayDelivery::Projectile && Window >= kHitscanGap)
+	else if (!Anim && Cast.Delivery == EReplayDelivery::Projectile && Window >= kHitscanGap)
 	{
 		if (ThrowAnim) { Anim = ThrowAnim; Len = ThrowAnim->GetPlayLength(); } // travelling throw
 	}
-	else if (SnapAnim)
+	else if (!Anim && SnapAnim)
 	{
 		Anim = SnapAnim; Len = SnapAnim->GetPlayLength(); // instant hitscan projectile / unresolved: quick flick
 	}
@@ -1121,7 +1188,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 				Pal.Primary.ToFColor(true), NumScale); // element-tinted, amount-scaled, gated
 
 			const float S = FMath::Clamp(0.6f + 0.8f * (float)Frac, 0.4f, 3.0f);
-			SpawnVerbFX(DamageFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), Elem, S);
+			SpawnVerbFX(DamageFX, SocketWorld(*E, TEXT("spine_03"), SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f)), Elem, S); // Step D: impact at the target's chest bone
 			// Law 6 juice: hit-stop / shake / crunch keyed to the damage fraction.
 			TriggerJuice(Frac);
 		}
@@ -1170,7 +1237,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		}
 		if (FReplayEntity* E = FindEntity(Target))
 		{
-			SpawnVerbFX(StatusFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 150.f), FString(), 1.0f);
+			SpawnVerbFX(StatusFX, HeadWorld(*E), FString(), 1.0f); // Step D: dock burst at the head bone (where the sigil docks)
 		}
 	}
 	else if (Event.Type == TEXT("ShieldGranted"))
@@ -1218,7 +1285,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		// modifyStat archetype: arrow stream + ring (direction glyph refined in Step E).
 		if (FReplayEntity* E = FindEntity(Target))
 		{
-			SpawnVerbFX(ModifyStatFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f), FString(), 1.0f);
+			SpawnVerbFX(ModifyStatFX, SocketWorld(*E, TEXT("spine_03"), SimToWorld(E->CurrentSim) + FVector(0, 0, 100.f)), FString(), 1.0f); // Step D: stat-mod aura at the chest bone
 		}
 	}
 	else if (Event.Type == TEXT("CastStarted"))
@@ -1410,7 +1477,7 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		}
 		if (FReplayEntity* E = FindEntity(Target))
 		{
-			SpawnVerbFX(StatusFX, SimToWorld(E->CurrentSim) + FVector(0, 0, 150.f), FString(), 0.6f);
+			SpawnVerbFX(StatusFX, HeadWorld(*E), FString(), 0.6f); // Step D: shatter burst at the head bone
 		}
 	}
 	// ZoneTicked: no dedicated visual (still logged canonically).

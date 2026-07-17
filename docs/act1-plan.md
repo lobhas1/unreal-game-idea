@@ -246,3 +246,48 @@ Fixture `warden-vs-duelist-t2-seed1`. Caster 1 is `a-defensive-earth-warden`.
 3. Step D socket-origin pass on the wizard rig (throws from `hand_r`, slam feet, channel chest/hands),
    visually confirmed; and visually confirm the SLAM leap-apex and THROW/SNAP reads.
 4. Re-run the gate at the appropriate cadence; full G1 + screenshots at the step-E stop.
+
+## Step C RESUMED — verb-first cast animation (implemented)
+
+Cast intent is now discovered from the resolving effects (`ClassifyDeliveries` second pass → `FReplayEvent::CastVerb`,
+priority **shield > heal > self-mobility**, else Generic) and **overrides** the delivery archetype in
+`PlayCastArchetype` — because a targeted heal is `Projectile` delivery yet must read as a heal, a shield
+as a guard. Generic verbs still use the delivery archetype (SLAM/CHANNEL/THROW/SNAP).
+
+**Per-verb clip table** (candidates evaluated in-editor via anim thumbnails — `CaptureAssetImage`):
+
+| verb | trigger (event stream) | clip | thumbnail read | verdict |
+|---|---|---|---|---|
+| **shield / ward** | `ShieldGranted` in cast group | `DefendStartAnim` + looped `DefendMaintainAnim` (window-sized composite) | braced stance, orb/guard raised | **wired** — fixes the warden `stone-aegis` misfit (was the aggressive Attack02 channel). |
+| **self-heal** | `Healed`, target == caster | `PotionDrinkAnim` | hand raised to mouth (drinking) | **wired** — reads as self-heal. |
+| **targeted-heal** | `Healed`, target ≠ caster | `InteractAnim` | two-handed forward bestow gesture | **wired** — non-aggressive, reads as an acceptable bestow (soft but not wrong). |
+| **mobility** | `Displaced`, subject == caster (no shield/heal) | `BattleRunForwardAnim` | mid-stride forward lean | **wired** — fixes `wind-step` (was Attack02); the body already lerps to the displaced position, so a run pose reads as a dash/step. |
+| generic Self buff | else (Self delivery) | `Attack02Start` + `Attack02Maintain` | attack wind-up | kept as the generic channel fallback. |
+
+Heal fallback: softened `Attack02` only if a heal clip fails to load (never a wrong-but-loud read). No
+verb needed a **Mixamo retarget flag** — every chosen clip read acceptably for its verb. Thumbnails saved
+under `scratchpad` during eval; `Attack02Start` confirmed *aggressive* (correctly rejected for shield/heal).
+
+Presentation-only (the REPLAY| log is untouched — `PlayCastArchetype` reads no state, emits nothing).
+Structural change (new `EReplayCastVerb`, new `FReplayEvent` field) → full rebuild. **fast-G1 (frost 4×)
+after this step: BYTE-IDENTICAL (116 lines) — verb-first change is log-safe.**
+
+## Step D — socket-origin pass (done)
+
+Audited every effect/cast FX emission origin so each anchors to a **body bone** (via `SocketWorld`/
+`HeadWorld`) on the wizard rig, not a raw sim position + fixed Z. Already-correct (from the earlier D):
+throws leave `hand_r` → target `spine_03`; self/channel burst `spine_03`; slam foot dust `foot_r` (decal
+stays at the event-given zone centre, Law 2); heal `spine_03`; shield shell `spine_03`. **Fixed this pass**
+(were raw `SimToWorld+Z`):
+
+| effect | was | now |
+|---|---|---|
+| `DamageDealt` impact | raw +100 | target **`spine_03`** (chest hit) |
+| `StatusApplied` dock burst | raw +150 | target **head** (`HeadWorld`) — where the sigil docks |
+| `StatusRemoved` shatter | raw +150 | target **head** (`HeadWorld`) |
+| `StatModified` aura | raw +100 | target **`spine_03`** |
+| regen mote (Tick) | raw +100 | target **`spine_03`** (rises from the chest) |
+
+All are body-only expression changes (no new members/signatures) ⇒ **Live-Coding-safe** (no editor-close
+rebuild). Presentation-only; the REPLAY| log is untouched. **fast-G1 (frost 4×) after Live Coding; then
+full step E.**
