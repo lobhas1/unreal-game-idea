@@ -289,5 +289,37 @@ stays at the event-given zone centre, Law 2); heal `spine_03`; shield shell `spi
 | regen mote (Tick) | raw +100 | target **`spine_03`** (rises from the chest) |
 
 All are body-only expression changes (no new members/signatures) ⇒ **Live-Coding-safe** (no editor-close
-rebuild). Presentation-only; the REPLAY| log is untouched. **fast-G1 (frost 4×) after Live Coding; then
-full step E.**
+rebuild). Presentation-only; the REPLAY| log is untouched. fast-G1 (frost 4×) after Live Coding:
+**BYTE-IDENTICAL.**
+
+## Step E — full gate + archetype screenshots (DONE; STOP for audit)
+
+On the C+D build (verb-first cast animation + socket-origin pass; C via full rebuild, D via Live Coding):
+
+- **Full G1 — PASS.** frost-ember **1× and 4×** and warden **1× and 4×** all **BYTE-IDENTICAL** to
+  `docs/references/` (116/116/96/96 lines, verbatim `cmp`).
+- **G1b — PASS.** frost-ember juice-**OFF** byte-identical to the reference (116 lines).
+- **Four archetype screenshots in the law camera + FrontInspection supplements** (8 total) in
+  `docs/screenshots/act1/`, on the 61-corpus (old showcase-named shots removed as superseded):
+
+| archetype | fixture | law shot | front shot |
+|---|---|---|---|
+| **THROW** | `frost-ember-seed1` (windowed projectile) | `throw-law.png` | `throw-front.png` |
+| **SLAM** | `blaze-2e5c00bf` (fire groundAoE) | `slam-law.png` | `slam-front.png` |
+| **CHANNEL** | `glimmer` (self modifyStat = generic channel) | `channel-law.png` | `channel-front.png` |
+| **SNAP** | `bramble` (instant targetUnit damage) | `snap-law.png` | `snap-front.png` |
+
+  Captured via editor-viewport screen-grab (`CopyFromScreen`) with the human foregrounding the editor;
+  **MCP `CaptureViewport` re-confirmed to render PIE skeletal actors as a gizmo**, so it cannot be used
+  for these. Each grab verified by eye as a genuine editor render (skinned wizards, correct camera, browser
+  label; throw shows frost fire-burst + ember frost column/sigils/shield). Fixtures picked verb-first-aware
+  (a groundAoE with a shield verb now routes to Defend, not SLAM). Law camera focuses the caster for
+  single-caster showcases (blaze/glimmer/bramble) and frames both for the frost-ember fight (ratified).
+  *Notes:* the slam/channel/snap poses land near-idle (brief cast anims vs a wall-clock capture offset —
+  timing, not a defect); every frame carries an **editor-only** "multiple directional lights competing"
+  overlay warning (arena `DirectionalLight` + spawned `ReplaySun`) — cosmetic, not in-render.
+
+**STOP for audit.** Act one C→E complete on the wizard rig: verb-first cast animation (shield/heal/mobility
+overrides), socket-origin pass, full G1 + G1b green, archetype screenshots filed. Next (after audit): the
+act-two **B-completion pass** (silhouette + motion refinement + nature/arcane, step-A guard) → greyscale
+twin ballot → integration.
