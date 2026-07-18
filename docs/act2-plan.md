@@ -205,3 +205,29 @@ committed per element with a screenshot. Summary:
 one's steps **C and D finished first** (the shield/ward → Defend remap, self-mobility mapping, and the
 socket-origin pass). We return to the animations before anything integrates. Animation law + fast-G1
 cadence remain in force. Step B stands as a prototyped, documented sandbox.
+
+## Step B REFINEMENT — silhouette + motion differentiation (ORDERED)
+
+Designer's early twin test convicted two rows: **material/skin variation alone is insufficient at gameplay
+distance** (Law 4 legibility + chibi-bold chunky-readable mandate). Required differentiation on **SHELLS and
+TRAILS** (bursts pass as-is). **Palettes are ratified as-is — ZERO color changes.** Identity is carried by
+**FORM (silhouette)** + a new per-element **MOTION SIGNATURE**. Cheap tricks encouraged: Niagara mesh
+renderers, rim-protrusion emitters, vertex animation — silhouette change, not new art.
+
+**Pre-registered acceptance bar (act-two step E twin ballot):** the ballot runs on **GREYSCALE** screenshots.
+If elements are distinguishable with color removed, identity is carried by form + motion (color returns as
+pure bonus). Formal ballot with screenshots at step E.
+
+| element | shell silhouette | trail form | motion signature |
+|---|---|---|---|
+| **fire** | protruding flame tongues on the rim | fire licks | flickers / rises |
+| **water** | wobbling droplet form (vertex offset) | streams with droplets | sloshes / drips |
+| **earth** | faceted **STONE** dome or orbiting rock chunks — **drop the lava-crack surface** (lava is fire-border substance; base earth = **brown stone**; extends finding 3) | rubble arc | heavy / near-still |
+| **air** | torn-open vortex, **not a closed ball** | Slash-Trail crescents | fast / erratic spin |
+| **light** | gold rays protruding (with the gold material instance from finding 2) | — | steady radial pulse |
+| **shadow** | ragged smoke edge | — | slow inward creep |
+| **nature** | leaf / vine lattice | — | grows / unfurls over lifetime |
+| **arcane** | keeps the hex / rune lattice (its signature) | — | geometric ticks |
+
+Execution: per element — apply the shell silhouette + trail form + motion signature, update this table with
+the concrete Niagara/mesh technique used, re-capture, **commit per element**. Bursts unchanged.
