@@ -17,6 +17,8 @@
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimComposite.h"
 #include "Animation/AnimSingleNodeInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Animation/AnimInstance.h"
 #include "Animation/Skeleton.h"
 #include "Animation/AnimationAsset.h"
 #include "Camera/CameraActor.h"
@@ -92,6 +94,8 @@ void AReplayPlayer::BeginPlay()
 	// skeleton, so the same sockets/anim machinery apply) + a looping idle for a natural stance.
 	BodyMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/BattleWizardPBR/Meshes/WizardSM.WizardSM"));
 	IdleAnim    = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Idle01Anim.Idle01Anim"));
+	// Approach A anim blueprint (idle base + DefaultSlot montage slot) - cast montages blend over idle.
+	WizardAnimClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/BattleWizardPBR/ABP_ReplayWizard.ABP_ReplayWizard_C"));
 	// Cast archetype anims (Act 1-C), mapped to the wizard's clips.
 	ThrowAnim   = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Attack01Anim.Attack01Anim"));
 	SlamAnim    = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Attack04Anim.Attack04Anim"));
@@ -403,10 +407,16 @@ void AReplayPlayer::ClassifyDeliveries()
 		const int32 Caster = NumField(Events[i].Payload, TEXT("caster"), 0);
 		Events[i].CasterId = Caster;
 
+		// Ingest CastResolved (contract): the real cast window ends at CastResolved, so that is the effect
+		// anchor / marker-alignment target - not wherever the first effect happens to land. Delivery, element
+		// and zone geometry still come from the first resolving effect below. Stream-only; drives no state.
+		double ResolveT = -1.0;
+
 		for (int32 j = i + 1; j < Events.Num() && Events[j].Type != TEXT("CastStarted"); ++j)
 		{
 			const FString& T = Events[j].Type;
 			const TSharedPtr<FJsonObject>& JP = Events[j].Payload;
+			if (T == TEXT("CastResolved")) { ResolveT = Events[j].T; continue; } // window end; keep scanning for delivery
 			if (T == TEXT("ZoneSpawned"))
 			{
 				Events[i].Delivery = EReplayDelivery::GroundAoE;
@@ -434,6 +444,9 @@ void AReplayPlayer::ClassifyDeliveries()
 				break;
 			}
 		}
+
+		// The cast window ends at CastResolved when the contract provides it (effect anchor = resolve).
+		if (ResolveT >= 0.0) { Events[i].EffectT = ResolveT; }
 	}
 
 	// Second pass - per-verb intent (for per-verb cast animation; overrides delivery in PlayCastArchetype).
@@ -508,10 +521,16 @@ void AReplayPlayer::BuildScaffold()
 		USkeletalMeshComponent* SMC = Body->GetSkeletalMeshComponent();
 		if (SMC) { SMC->SetMobility(EComponentMobility::Movable); }
 		SMC->SetSkeletalMeshAsset(BodyMesh);
-		if (IdleAnim)
+		if (WizardAnimClass)
+		{
+			// Approach A: the ABP plays idle as the base pose and exposes DefaultSlot; cast montages
+			// play on that slot and blend over the idle (blend-in/out). No manual idle-resume needed.
+			SMC->SetAnimInstanceClass(WizardAnimClass);
+		}
+		else if (IdleAnim) // fallback: single-node looping idle (no blends)
 		{
 			SMC->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-			SMC->PlayAnimation(IdleAnim, true); // looping idle
+			SMC->PlayAnimation(IdleAnim, true);
 		}
 		if (UMaterialInstanceDynamic* MID = SMC->CreateDynamicMaterialInstance(0))
 		{
@@ -960,12 +979,15 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 	// which a window-first rule would collapse to SNAP for everything.
 	UAnimSequenceBase* Anim = nullptr; // sequence or runtime composite to play
 	float Len = 0.f;                   // its timeline length (composite: accumulated; sequence: play length)
+	float TrimStart = 0.f;             // seconds to skip at the clip start (CHANNEL: past the right-hand intro)
+	float Marker = 0.f;                // release/impact time (s) from playback start; aligned to the effect event
 
 	// VERB-FIRST: shield/heal/mobility read by INTENT and OVERRIDE the delivery archetype - a targeted
 	// heal is Projectile delivery but must read as a heal, not a throw; a shield must read as a guard.
 	// Per-verb clips chosen by in-editor thumbnail eval (filed in docs/act1-plan.md).
 	if (Cast.CastVerb == EReplayCastVerb::Shield)
 	{
+		Marker = 0.333f; // WARD release: guard raised (~end of DefendStart; no explicit frame given)
 		// WARD = Defend Start + looped Defend Maintain (raised guard), window-sized like the channel.
 		UAnimSequence* DS = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/DefendStartAnim.DefendStartAnim"));
 		UAnimSequence* DM = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/DefendMaintainAnim.DefendMaintainAnim"));
@@ -989,15 +1011,15 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 	}
 	else if (Cast.CastVerb == EReplayCastVerb::HealSelf)
 	{
-		if (UAnimSequence* P = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/PotionDrinkAnim.PotionDrinkAnim"))) { Anim = P; Len = P->GetPlayLength(); } // drink a potion
+		if (UAnimSequence* P = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/PotionDrinkAnim.PotionDrinkAnim"))) { Anim = P; Len = P->GetPlayLength(); Marker = 1.833f; } // drink (release frame 55@30fps)
 	}
 	else if (Cast.CastVerb == EReplayCastVerb::HealTarget)
 	{
-		if (UAnimSequence* I = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/InteractAnim.InteractAnim"))) { Anim = I; Len = I->GetPlayLength(); } // forward bestow gesture
+		if (UAnimSequence* I = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/InteractAnim.InteractAnim"))) { Anim = I; Len = I->GetPlayLength(); Marker = 0.900f; } // bestow (release frame 27@30fps)
 	}
 	else if (Cast.CastVerb == EReplayCastVerb::Mobility)
 	{
-		if (UAnimSequence* R = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/BattleRunForwardAnim.BattleRunForwardAnim"))) { Anim = R; Len = R->GetPlayLength(); } // dash/step; body lerps to the displaced position
+		if (UAnimSequence* R = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/BattleRunForwardAnim.BattleRunForwardAnim"))) { Anim = R; Len = R->GetPlayLength(); Marker = 0.10f; } // dash push-off at start; body lerps to the displaced position
 	}
 	// Heal fallback: softened Attack02 channel if the heal clip failed to load - never a wrong-but-loud read.
 	if (!Anim && (Cast.CastVerb == EReplayCastVerb::HealSelf || Cast.CastVerb == EReplayCastVerb::HealTarget) && ChannelAnim)
@@ -1010,8 +1032,9 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 	// the generics so slam/channel/throw differentiate (the corpus models most casts with a ~0 window).
 	if (!Anim && Cast.Delivery == EReplayDelivery::GroundAoE)
 	{
-		// SLAM = leap-slam composite (chibi-bold): JumpUpAttack -> JumpAirAttack -> JumpEnd.
-		UAnimSequence* Up  = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/JumpUpAttackAnim.JumpUpAttackAnim"));
+		Marker = 1.933f; // SLAM impact: JumpEnd footplant frame 13 (JumpStart 0.667 + JumpAir 0.833 + 0.433)
+		// SLAM = leap-slam composite (chibi-bold): JumpStart -> JumpAirAttack -> JumpEnd, blended as one motion.
+		UAnimSequence* Up  = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/JumpStartAnim.JumpStartAnim"));
 		UAnimSequence* Air = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/JumpAirAttackAnim.JumpAirAttackAnim"));
 		UAnimSequence* End = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/JumpEndAnim.JumpEndAnim"));
 		if (Skel && (Up || Air || End))
@@ -1032,55 +1055,53 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 	}
 	else if (!Anim && Cast.Delivery == EReplayDelivery::Self)
 	{
-		// CHANNEL = Attack02 Start + looped Attack02 Maintain, sized to fill the cast->effect window.
-		// Looping is the lawful fit for LONG windows (natural-speed Maintain repeats); SHORT windows
-		// get no loops and the Start clip rate-stretches to fit (below).
-		UAnimSequence* Start    = ChannelAnim; // Attack02StartAnim (loaded in BeginPlay)
-		UAnimSequence* Maintain = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Attack02MaintainAnim.Attack02MaintainAnim"));
-		if (Skel && Start)
+		// CHANNEL = VictoryStart, trimmed past the opening right-hand flourish; the montage blend-in/out
+		// carries idle -> arms cross -> back to idle so the trimmed start doesn't pop.
+		if (UAnimSequence* V = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/VictoryStartAnim.VictoryStartAnim")))
 		{
-			const float StartLen    = Start->GetPlayLength();
-			const float MaintainLen = Maintain ? Maintain->GetPlayLength() : 0.f;
-			int32 Loops = 0;
-			if (Maintain && MaintainLen > KINDA_SMALL_NUMBER && (double)StartLen < Window)
-			{
-				Loops = FMath::Clamp(FMath::RoundToInt(((float)Window - StartLen) / MaintainLen), 0, 64);
-			}
-			UAnimComposite* C = NewObject<UAnimComposite>(this);
-			C->SetSkeleton(Skel);
-			float Cursor = 0.f;
-			AddSeg(C, Cursor, Start, 1);
-			if (Loops > 0) { AddSeg(C, Cursor, Maintain, Loops); }
-			if (C->AnimationTrack.AnimSegments.Num() > 0)
-			{
-				C->SetCompositeLength(Cursor);
-				Anim = C; Len = Cursor;
-			}
+			Anim = V; Len = V->GetPlayLength(); TrimStart = 1.333f; Marker = 0.933f; // trim frame 40; arms-crossed frame 68 (0.933s after trim)
 		}
-		if (!Anim && ChannelAnim) { Anim = ChannelAnim; Len = ChannelAnim->GetPlayLength(); }
+		else if (ChannelAnim) { Anim = ChannelAnim; Len = ChannelAnim->GetPlayLength(); }
 	}
 	else if (!Anim && Cast.Delivery == EReplayDelivery::Projectile && Window >= kHitscanGap)
 	{
-		if (ThrowAnim) { Anim = ThrowAnim; Len = ThrowAnim->GetPlayLength(); } // travelling throw
+		// THROW = Attack03Start (release ~frame 24 @30fps = 0.80s).
+		if (UAnimSequence* T = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Attack03StartAnim.Attack03StartAnim"))) { Anim = T; Len = T->GetPlayLength(); Marker = 0.800f; } // release frame 24@30fps
 	}
-	else if (!Anim && SnapAnim)
+	else if (!Anim)
 	{
-		Anim = SnapAnim; Len = SnapAnim->GetPlayLength(); // instant hitscan projectile / unresolved: quick flick
+		// SNAP = Attack04 (release ~frame 26 @30fps = 0.867s), instant hitscan / unresolved.
+		if (UAnimSequence* S4 = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/BattleWizardPBR/Animations/Attack04Anim.Attack04Anim"))) { Anim = S4; Len = S4->GetPlayLength(); Marker = 0.867f; } // release frame 26@30fps
 	}
 
 	if (!Anim || Len <= 0.f) { return; }
 
-	// Visibility floor: the corpus models most casts with a ~0 cast->effect window, so fitting the
-	// play-rate STRICTLY to the window plays every cast in a few milliseconds - invisible. Floor the
-	// window at the clip's own length so a ~0-window cast plays at NATURAL speed (rate == replay speed),
-	// while a genuinely long window still stretches the clip to fill it (rate < speed). Cosmetic only:
-	// the effect event already fired on its own SimTime, so a visible cast never delays or drives it.
-	const double W = FMath::Max(Window, (double)Len);
-	// Window is sim-seconds; wall-clock window = W / SpeedMultiplier, so scale the rate by speed to keep
-	// the fit at any playback speed. With W >= Len the rate is <= replay speed (==speed at a ~0 window).
-	const float Rate = FMath::Clamp((float)((double)Len * FMath::Max(SpeedMultiplier, 0.01f) / W), 0.1f, 8.f);
-	SMC->PlayAnimation(Anim, false); // single-node, non-looping; holds last pose then idle resumes on next cast
-	SMC->SetPlayRate(Rate);
+	// RELEASE-MARKER ALIGNMENT (THE ANIMATION LAW): fit the play-rate so the release marker coincides
+	// with the effect event. Short windows rate-stretch (the wind-up compresses so the marker lands on
+	// the effect); the marker lands on the effect at any window. (Natural-rate delayed-start for LONG
+	// windows is a deferred refinement; the corpus is almost all ~0-window.) Events are never moved -
+	// the performance is fitted to the clock. Presentation-only, so G1 is untouched.
+	// RELEASE-MARKER ALIGNMENT (THE ANIMATION LAW), strict everywhere now that real cast windows exist
+	// (window = CastStarted->CastResolved): fit the play-rate so the release marker coincides with the
+	// effect event. Real windows play the wind-up visibly; the 18 declared instants (~0 window) rate-
+	// stretch to the SNAP flick, as designed. Events are never moved - the performance fits the clock.
+	const float RelT = (Marker > 0.f) ? Marker : Len;            // release time (s) from playback start
+	const double Wm  = FMath::Max(Window, 0.03);                 // sim window, floored so the rate stays finite
+	const float Rate = FMath::Clamp((float)((double)RelT * FMath::Max(SpeedMultiplier, 0.01f) / Wm), 0.1f, 12.f);
+
+	// Approach A: play the archetype as a runtime DYNAMIC MONTAGE on the ABP's DefaultSlot, so it BLENDS
+	// over the idle base (blend-in from idle, blend-out back to idle); TrimStart skips the clip intro.
+	if (UAnimInstance* AI = SMC->GetAnimInstance())
+	{
+		if (UAnimMontage* Mont = UAnimMontage::CreateSlotAnimationAsDynamicMontage(Anim, TEXT("DefaultSlot"), 0.20f, 0.25f, 1.f, 1))
+		{
+			AI->Montage_Play(Mont, Rate, EMontagePlayReturnType::MontageLength, TrimStart); // start past the trim; blend-in from idle
+		}
+	}
+	else
+	{
+		SMC->PlayAnimation(Anim, false); SMC->SetPlayRate(Rate); // single-node fallback (no blend)
+	}
 }
 
 void AReplayPlayer::SpawnVerbFX(UNiagaraSystem* System, const FVector& Loc,

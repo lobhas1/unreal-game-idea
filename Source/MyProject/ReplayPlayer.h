@@ -225,6 +225,9 @@ private:
 	// --- skeletal casters (Act 1): mannequin body + a looping idle so the stance reads ---
 	USkeletalMesh* BodyMesh = nullptr;
 	UAnimSequence* IdleAnim = nullptr;
+	// Approach A: the wizard runs ABP_ReplayWizard (idle base + DefaultSlot) so cast montages BLEND
+	// over the idle (blend-in/out); null => single-node fallback.
+	UClass* WizardAnimClass = nullptr;
 	// Cast archetype anims (Act 1-C), mapped from verb+delivery; play-rate is fit to the
 	// event-given cast->effect window per THE ANIMATION LAW (performance under cues).
 	UAnimSequence* ThrowAnim = nullptr;   // travelling projectile: Attack01Anim (staff-point cast)
