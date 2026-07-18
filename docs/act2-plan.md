@@ -231,3 +231,12 @@ pure bonus). Formal ballot with screenshots at step E.
 
 Execution: per element — apply the shell silhouette + trail form + motion signature, update this table with
 the concrete Niagara/mesh technique used, re-capture, **commit per element**. Bursts unchanged.
+
+### B-completion cleanup list (bundled into the B-completion pass)
+- **"Multiple directional lights competing" editor overlay** — the arena has a placed `DirectionalLight`
+  and the renderer spawns `ReplaySun`; the warning overlays every PIE/screenshot frame (editor-only, not
+  in-render). Fix: give `ReplaySun` the winning `ForwardShadingPriority` uniquely and/or lower the map
+  light's, so the warning stays out of captures. (Returned from the act-one E audit.)
+- **Stray grey-checker placeholder near the arena origin** — appears in every cast still incl.
+  projectile-less ones (see act1-plan audit answer b); identify + remove.
+- **Template blue plane** — none needed: the blue is `SM_SkySphere` (sky dome), not a stray plane.

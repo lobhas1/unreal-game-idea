@@ -323,3 +323,37 @@ On the C+D build (verb-first cast animation + socket-origin pass; C via full reb
 overrides), socket-origin pass, full G1 + G1b green, archetype screenshots filed. Next (after audit): the
 act-two **B-completion pass** (silhouette + motion refinement + nature/arcane, step-A guard) → greyscale
 twin ballot → integration.
+
+## Audit answers + RELEASE-MARKER table (STOP — human fills the release seconds)
+
+**(a) The hard-edged blue "water-like" plane** is the engine **`SM_SkySphere`** (scale 400, material
+`M_SimpleSkyDome`) — the arena's sky backdrop, read as a hard blue expanse past the finite `ReplayFloor`
+edge. It is **not water**; A0's "no water body" stands (A0 correctly named the sky sphere). No water actor
+exists in the level.
+
+**(b) The grey ball** appears even in the **projectile-less** SLAM (blaze) and CHANNEL (glimmer) stills, so
+it is **not** the cast projectile — it is a **stray grey-checker placeholder near the arena origin** (worth
+removing). The real projectiles ARE event-driven: they spawn at the caster's `hand_r` and lerp to the
+**target's chest** (`ToW` from the event's caster/target), i.e. toward the opponent; the "away" read is the
+head caught at spawn on the caster's off-side, not an inverted direction. (Both flagged for a quick verify.)
+
+### Release markers (clip durations measured via `SequenceLength`; release seconds are my best guesses)
+| verb-intent | archetype | clip asset | duration (s) | best-guess release/impact (s) |
+|---|---|---|---|---|
+| generic — windowed projectile | **THROW** | `Attack01Anim` | 1.000 | ~0.65 (staff-point forward) |
+| generic — groundAoE | **SLAM** | `JumpUpAttackAnim`→`JumpAirAttackAnim`→`JumpEndAnim` (composite) | 2.500 (0.833×3) | ~1.90 (foot-plant, into `JumpEnd`) |
+| generic — self | **CHANNEL** | `Attack02StartAnim` (+`Attack02MaintainAnim` loop) | 0.667 + 0.333/loop | ~0.50 (end of Start) |
+| generic — instant/unresolved projectile | **SNAP** | `Attack03StartAnim` | 1.333 | ~0.15 (quick flick at start) |
+| shield / ward | **WARD** | `DefendStartAnim` (+`DefendMaintainAnim` loop) | 0.333 + 0.333/loop | ~0.30 (guard raised, end of Start) |
+| self-heal | **HEAL(self)** | `PotionDrinkAnim` | 2.667 | ~1.30 (vial to mouth) |
+| targeted-heal | **HEAL(target)** | `InteractAnim` | 1.667 | ~1.00 (bestow gesture) |
+| self-mobility | **DASH** | `BattleRunForwardAnim` | 0.800 | ~0.10 (push-off at start) |
+| idle (base) | — | `Idle01Anim` | ~1.0 (loop) | n/a |
+
+**How to scrub a clip:** in the Content Browser open `Content/BattleWizardPBR/Animations/<Clip>` (double-click)
+to launch the Animation Sequence editor; drag the timeline scrubber to the frame where the release/impact
+reads (staff points forward · foot plants · vial reaches the mouth · guard fully raised), read the **time in
+seconds** off the timeline, and enter it in the "release" column — flag any clip that should be swapped.
+
+**STOP.** Awaiting the human's corrected release seconds (and any clip swaps) before wiring per-clip
+`ReleaseMarker` alignment (fit the marker to the effect event; events are never delayed).
