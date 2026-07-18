@@ -1,16 +1,20 @@
 cast E1 shadow-mark
+castResolved E1 shadow-mark
 status E2 Vulnerable dur=5 stacks=1 refreshed=False
 status E2 Stealth dur=2 stacks=1 refreshed=False
 modifyStat E2 MoveSpeed pct=25 dur=2
 cast E2 shadow-mark
+castResolved E2 shadow-mark
 status E1 Vulnerable dur=5 stacks=1 refreshed=False
 status E1 Blind dur=2 stacks=1 refreshed=False
 modifyStat E1 Evasion pct=-30 dur=5
 cast E1 void-strike
+castResolved E1 void-strike
 damage E2 amt=293.22 Shadow crit=False killed=False absorbed=0
 status E2 Bleed dur=5 stacks=1 refreshed=False
 displace E1 Dash to=(3,0,0) blocked=False
 cast E2 void-burst
+castResolved E2 void-burst
 damage E1 amt=439.04 Shadow crit=False killed=False absorbed=0
 statusRemoved E1 Vulnerable
 status E1 Bleed dur=5 stacks=1 refreshed=False
@@ -19,10 +23,12 @@ damage E2 amt=43.52 Arcane crit=False killed=False absorbed=0
 damage E1 amt=51.2 Arcane crit=False killed=False absorbed=0
 cast E1 umbral-shroud
 damage E2 amt=43.52 Arcane crit=False killed=False absorbed=0
+castResolved E1 umbral-shroud
 shield E1 amt=92.16 dur=5
 status E1 Stealth dur=5 stacks=1 refreshed=False
 modifyStat E1 CritChance pct=25 dur=5
 cast E2 shroud-step
+castResolved E2 shroud-step
 displace E2 Teleport to=(8,0,0) blocked=False
 status E2 Stealth dur=2 stacks=1 refreshed=False
 shield E2 amt=60.93 dur=2
@@ -46,6 +52,7 @@ damage E1 amt=51.2 Arcane crit=False killed=False absorbed=0
 damage E2 amt=43.52 Arcane crit=False killed=False absorbed=0
 statusRemoved E2 Vulnerable
 cast E1 shadow-mark
+castResolved E1 shadow-mark
 status E2 Vulnerable dur=5 stacks=1 refreshed=False
 status E2 Stealth dur=2 stacks=1 refreshed=False
 modifyStat E2 MoveSpeed pct=25 dur=2
@@ -57,21 +64,25 @@ statusRemoved E1 Bleed
 statusRemoved E1 Stealth
 statusRemoved E2 Stealth
 cast E2 shadow-mark
+castResolved E2 shadow-mark
 status E1 Vulnerable dur=5 stacks=1 refreshed=False
 status E1 Blind dur=2 stacks=1 refreshed=False
 modifyStat E1 Evasion pct=-30 dur=5
 cast E1 void-strike
+castResolved E1 void-strike
 damage E2 amt=293.22 Shadow crit=False killed=False absorbed=0
 status E2 Bleed dur=5 stacks=1 refreshed=False
 displace E1 Dash to=(6,0,0) blocked=False
 damage E2 amt=43.52 Arcane crit=False killed=False absorbed=0
 statusRemoved E2 Vulnerable
 cast E1 shadow-mark
+castResolved E1 shadow-mark
 status E2 Vulnerable dur=5 stacks=1 refreshed=False
 status E2 Stealth dur=2 stacks=1 refreshed=False
 modifyStat E2 MoveSpeed pct=25 dur=2
 damage E2 amt=43.52 Arcane crit=False killed=False absorbed=0
 cast E2 shroud-step
+castResolved E2 shroud-step
 displace E2 Teleport to=(8,0,0) blocked=False
 status E2 Stealth dur=2 stacks=1 refreshed=False
 shield E2 amt=60.93 dur=2
@@ -91,22 +102,27 @@ damage E2 amt=43.52 Arcane crit=False killed=False absorbed=0
 statusRemoved E2 Bleed
 statusRemoved E2 Vulnerable
 cast E1 shadow-mark
+castResolved E1 shadow-mark
 status E2 Vulnerable dur=5 stacks=1 refreshed=False
 status E2 Stealth dur=2 stacks=1 refreshed=False
 modifyStat E2 MoveSpeed pct=25 dur=2
 cast E2 void-burst
+castResolved E2 void-burst
 damage E1 amt=179.2 Shadow crit=False killed=False absorbed=0
 modifyStat E1 DamageOut pct=30 dur=2
 cast E1 umbral-shroud
+castResolved E1 umbral-shroud
 shield E1 amt=92.16 dur=5
 status E1 Stealth dur=5 stacks=1 refreshed=False
 modifyStat E1 CritChance pct=25 dur=5
 statusRemoved E2 Stealth
 cast E2 shadow-mark
+castResolved E2 shadow-mark
 status E1 Vulnerable dur=5 stacks=1 refreshed=False
 status E1 Blind dur=2 stacks=1 refreshed=False
 modifyStat E1 Evasion pct=-30 dur=5
 cast E1 void-strike
+castResolved E1 void-strike
 damage E2 amt=586.43 Shadow crit=True killed=False absorbed=0
 status E2 Bleed dur=5 stacks=1 refreshed=False
 displace E1 Dash to=(8,0,0) blocked=False

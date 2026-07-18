@@ -1,14 +1,18 @@
 cast E1 stone-aegis
+castResolved E1 stone-aegis
 shield E1 amt=76.16 dur=5
 modifyStat E1 Armor pct=30 dur=5
 cast E2 gust-slash
+castResolved E2 gust-slash
 damage E1 amt=62.77 Air crit=False killed=False absorbed=0
 status E1 Slow dur=2 stacks=1 refreshed=False
 cast E1 earthen-grasp
+castResolved E1 earthen-grasp
 status E2 Root dur=5 stacks=1 refreshed=False
 modifyStat E2 MoveSpeed pct=-52.5 dur=10
 damage E2 amt=32 Earth crit=False killed=False absorbed=0
 cast E2 cyclone-burst
+castResolved E2 cyclone-burst
 damage E1 amt=172.31 Air crit=False killed=False absorbed=0
 statusRemoved E1 Slow
 displace E1 Push to=(6,0,0) blocked=False
@@ -16,8 +20,10 @@ modifyStat E1 MoveSpeed pct=-30 dur=2
 status E1 Weaken dur=2 stacks=1 refreshed=False
 cast E1 tremor-field
 statusRemoved E1 Weaken
+castResolved E1 tremor-field
 zoneSpawned Z1 Circle r=6 dur=10
 cast E2 wind-step
+castResolved E2 wind-step
 displace E2 Dash to=(8,0,0) blocked=False
 modifyStat E2 Evasion pct=50 dur=2
 modifyStat E2 MoveSpeed pct=30 dur=2
@@ -33,6 +39,7 @@ damage E2 amt=102.4 Earth crit=False killed=False absorbed=0
 status E2 Slow dur=2 stacks=1 refreshed=False
 modifyStat E2 DamageOut pct=-25 dur=2
 cast E2 gust-slash
+castResolved E2 gust-slash
 damage E1 amt=61.2 Air crit=False killed=False absorbed=0
 status E1 Slow dur=2 stacks=1 refreshed=False
 zoneTick Z1 affected=1
@@ -46,6 +53,7 @@ damage E2 amt=102.4 Earth crit=False killed=False absorbed=0
 status E2 Slow dur=2 stacks=1 refreshed=True
 modifyStat E2 DamageOut pct=-25 dur=2
 statusRemoved E2 Root
+castResolved E1 earthen-grasp
 status E2 Root dur=2.5 stacks=1 refreshed=False
 modifyStat E2 MoveSpeed pct=-52.5 dur=10
 damage E2 amt=32 Earth crit=False killed=False absorbed=0
@@ -72,6 +80,7 @@ status E2 Slow dur=2 stacks=1 refreshed=True
 modifyStat E2 DamageOut pct=-25 dur=2
 statusRemoved E2 Root
 cast E1 stone-aegis
+castResolved E1 stone-aegis
 shield E1 amt=76.16 dur=5
 modifyStat E1 Armor pct=30 dur=5
 zoneTick Z1 affected=1
@@ -90,6 +99,7 @@ cast E2 cyclone-burst
 zoneTick Z1 affected=1
 damage E2 amt=102.4 Earth crit=False killed=True absorbed=0
 modifyStat E2 DamageOut pct=-25 dur=2
+castResolved E2 cyclone-burst
 damage E1 amt=73.85 Air crit=False killed=False absorbed=0
 modifyStat E1 MoveSpeed pct=-30 dur=2
 status E1 Weaken dur=2 stacks=1 refreshed=False
