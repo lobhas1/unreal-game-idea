@@ -408,6 +408,9 @@ animation plays normally.
 
 CastResolved alignment + the montage blend (Approach A) validated end-to-end live across every archetype.
 
+**BODY: wizard — ratified live 2026-07-18, all six archetypes passing (SLAM/THROW/WARD/HEAL/CHANNEL/SNAP).**
+Act one (beauty pass, phase 1: skeletal casters + cast archetypes) closes on this line.
+
 **Concept-element palette fix (commit `19a6d4c`):** zones/decals/FX read the palette from `CurrentConceptElement`,
 which was looked up by spell NAME against a manifest keyed by hashed id — so it always missed and every showcase
 fell back to arcane-neutral (purple); a light heal rendered purple. Fixed: resolve from the loaded showcase's
