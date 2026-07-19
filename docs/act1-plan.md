@@ -383,12 +383,22 @@ WARD 12 (of 14) — all ~0.8 s; **18** declared instants — SNAP 12, CHANNEL 1 
 Consequence for the four generic archetype stills: **THROW + SLAM show real wind-ups**; **CHANNEL (glimmer,
 the only CHANNEL cast) and SNAP are instant** (window 0 → ~12× flick, no wind-up by design).
 
-### Marker re-captures — PENDING (editor must be foreground)
-Reps + capture offset (= resolve time @1×): THROW `cinder-e43f6121` 0.80 · SLAM `murk-7ff0b332` 0.80 ·
-WARD `scrying-pool-4ba61be1` 0.80 · HEAL `lighthouse-01d420e1` 0.80 · CHANNEL `glimmer` ~0.25 (instant) ·
-SNAP `blaze-2e5c00bf` ~0.25 (instant). Six archetypes × (law + front) = 12 stills (human chose the full set).
+### Marker re-captures — automated stills can't show the body; ballot is LIVE
+Reps (6 × law+front, human chose the full set): THROW `cinder-e43f6121` · SLAM `murk-7ff0b332` ·
+WARD `scrying-pool-4ba61be1` · HEAL `lighthouse-01d420e1` · CHANNEL `glimmer` (instant) · SNAP `blaze-2e5c00bf` (instant).
 
-**Blocked:** `capture.ps1` grabs the **foreground window**; a first run captured a non-editor foreground
-(discarded on sight, nothing committed — privacy). MCP `CaptureViewport` can't substitute (PIE skeletal actor
-renders as a gizmo proxy). The re-capture needs the **Unreal Editor viewport foregrounded** (ideally the PIE
-viewport maximised). Held for that, then the body ballot.
+**Finding: automated marker stills are not viable for the body.** Two capture paths, both fail for the
+skeletal pose: `capture.ps1` grabs the OS **foreground window** (a first run caught a non-editor foreground —
+discarded on sight, nothing committed; privacy) and `CaptureViewport` renders the PIE skeletal actor as a
+**gizmo proxy**. `CaptureEditorImage` (MCP) is privacy-safe and shows the real mesh + VFX, but the **skeletal
+animation does not advance in the headless/throttled grab** — a full offset sweep (0.6→3.4 s at 0.25×) held the
+body frozen in the idle pose while the VFX evolved. The committed step-E stills show the same idle pose, so this
+is a long-standing capture limitation, not a regression. **The body ballot is done LIVE in PIE**, where the
+animation plays normally.
+
+**Live ballot — SLAM (murk @0.35×): PASS.** Human confirmed the wizard leaps → slams and the spell activates at
+the correct time (footplant/resolve) — CastResolved alignment + the montage blend validated end-to-end live.
+
+**Telegraph decal RETAINED (human ruling):** the faint cast-start zone decal (`SpawnZoneDecal` 0.12 opacity at
+the future zone centre) reads as a purple tint before the slam lands. Kept intentionally as an **AoE
+area-warning** (foreshadows where the spell is coming); not removed. The real zone fills at `ZoneSpawned` (=resolve).
