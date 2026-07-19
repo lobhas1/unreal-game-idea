@@ -268,12 +268,17 @@ void AReplayPlayer::LoadManifestElements()
 	{
 		const TSharedPtr<FJsonObject> O = V->AsObject();
 		if (!O.IsValid()) { continue; }
-		FString Id, Elem;
+		FString Id, Elem, Disp;
 		O->TryGetStringField(TEXT("id"), Id);
 		O->TryGetStringField(TEXT("element"), Elem);
+		O->TryGetStringField(TEXT("displayName"), Disp);
 		if (!Id.IsEmpty())
 		{
 			SpellElement.Add(Id.ToLower(), Elem.ToLower());
+			// Cast events name the spell by its DISPLAY NAME (canonical "cast E1 lighthouse"), while the
+			// manifest id carries a hash suffix (lighthouse-01d420e1) - so also key by displayName, else the
+			// concept lookup misses and every zone/decal falls back to the arcane-neutral (purple) palette.
+			if (!Disp.IsEmpty()) { SpellElement.Add(Disp.ToLower(), Elem.ToLower()); }
 			ShowcaseOrder.Add(Id); // manifest order == browser cycle order (Step 3b)
 		}
 	}
@@ -1309,8 +1314,16 @@ void AReplayPlayer::RenderEventVisual(const FReplayEvent& Event)
 		int32 Caster = 0; P->TryGetNumberField(TEXT("caster"), Caster);
 		FString Spell; P->TryGetStringField(TEXT("spell"), Spell);
 		Float(HeadOf(Caster) + FVector(0, 0, 40.f), Spell, FColor::White);
-		// Concept-element palette for this cast's clauses (empty if not a showcase spell).
-		CurrentConceptElement = SpellElement.FindRef(Spell.ToLower());
+		// Concept-element palette for this cast's clauses. PRIMARY: the loaded showcase's own element,
+		// keyed by its UNIQUE manifest id (derived from ReplayPath). This is deliberate, do NOT
+		// 'simplify' it to a spell-name lookup: the corpus has same-name TWINS with different elements
+		// (Mist = water/air, Snare = nature/shadow), and a displayName key is last-write-wins-wrong for
+		// exactly the spells the hashed ids exist to protect. FALLBACK (fights / no manifest id): the
+		// name-map by spell name (dual-keyed by id + displayName), which resolves empty for M1 fights.
+		FString ShowcaseId = FPaths::GetCleanFilename(ReplayPath); // e.g. lighthouse-01d420e1.replay.json
+		ShowcaseId.RemoveFromEnd(TEXT(".json")); ShowcaseId.RemoveFromEnd(TEXT(".replay"));
+		const FString ShowcaseElem = SpellElement.FindRef(ShowcaseId.ToLower());
+		CurrentConceptElement = !ShowcaseElem.IsEmpty() ? ShowcaseElem : SpellElement.FindRef(Spell.ToLower());
 		// Act 1-C: play the caster's cast archetype (play-rate fit to this cast's window).
 		PlayCastArchetype(FindEntity(Event.CasterId), Event);
 
