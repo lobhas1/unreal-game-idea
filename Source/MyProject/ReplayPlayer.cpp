@@ -1076,11 +1076,6 @@ void AReplayPlayer::PlayCastArchetype(FReplayEntity* E, const FReplayEvent& Cast
 
 	if (!Anim || Len <= 0.f) { return; }
 
-	// RELEASE-MARKER ALIGNMENT (THE ANIMATION LAW): fit the play-rate so the release marker coincides
-	// with the effect event. Short windows rate-stretch (the wind-up compresses so the marker lands on
-	// the effect); the marker lands on the effect at any window. (Natural-rate delayed-start for LONG
-	// windows is a deferred refinement; the corpus is almost all ~0-window.) Events are never moved -
-	// the performance is fitted to the clock. Presentation-only, so G1 is untouched.
 	// RELEASE-MARKER ALIGNMENT (THE ANIMATION LAW), strict everywhere now that real cast windows exist
 	// (window = CastStarted->CastResolved): fit the play-rate so the release marker coincides with the
 	// effect event. Real windows play the wind-up visibly; the 18 declared instants (~0 window) rate-

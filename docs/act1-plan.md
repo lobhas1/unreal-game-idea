@@ -357,3 +357,38 @@ seconds** off the timeline, and enter it in the "release" column — flag any cl
 
 **STOP.** Awaiting the human's corrected release seconds (and any clip swaps) before wiring per-clip
 `ReleaseMarker` alignment (fit the marker to the effect event; events are never delayed).
+
+## E re-check — cast-window contract adopted (CastResolved); B-mode retired
+
+The sim-side cast-time resync landed a `CastResolved` event per cast, giving **real cast windows**. Renderer
+adapted (commits `d69822b` references, `699eb96` code):
+
+- **References regenerated** — derived data, never hand-edited: each line is the C# authority's canonical
+  projection, echoed verbatim (`LoadReplay` loads every event; `EmitCanonical` echoes `Event.Canonical`).
+  Regenerated mechanically as `[e.canonical for e in events]`: frost-ember 116→141, warden 96→106,
+  shadow 129 (deltas = the new `castResolved` lines). LF, single trailing newline.
+- **CastResolved ingested** — `ClassifyDeliveries` takes the cast-window end from `CastResolved` (window =
+  `CastStarted`→`CastResolved`), the effect anchor. Delivery/element/zone still read from the first resolving
+  effect. Effect VFX already land at the resolve because the sim emits effects at `CastResolved.t` (verified:
+  barrow cast 0.0 → resolve 0.8, effects at 0.8).
+- **B-mode retired entirely** — real windows make strict marker-alignment visible, so the showcase-scoped
+  natural-speed + deferred-FX path is gone (`FDeferredFX`/queue/`BModeReleaseDelaySim`/`SpawnVerbFXNow`/Tick
+  firing all removed). `PlayCastArchetype` fits the play-rate strictly everywhere; instants (~0 window)
+  rate-stretch to the SNAP flick as designed.
+
+**Full G1 — GREEN.** frost-ember + warden at 1× and 4×, byte-identical to the regenerated references (4/4).
+
+**Corpus window census (61 showcases):** real windows on **43** spells — THROW 15, SLAM 8, HEAL 8 (of 10),
+WARD 12 (of 14) — all ~0.8 s; **18** declared instants — SNAP 12, CHANNEL 1 (glimmer), DASH 1, +2 heal/+2 ward.
+Consequence for the four generic archetype stills: **THROW + SLAM show real wind-ups**; **CHANNEL (glimmer,
+the only CHANNEL cast) and SNAP are instant** (window 0 → ~12× flick, no wind-up by design).
+
+### Marker re-captures — PENDING (editor must be foreground)
+Reps + capture offset (= resolve time @1×): THROW `cinder-e43f6121` 0.80 · SLAM `murk-7ff0b332` 0.80 ·
+WARD `scrying-pool-4ba61be1` 0.80 · HEAL `lighthouse-01d420e1` 0.80 · CHANNEL `glimmer` ~0.25 (instant) ·
+SNAP `blaze-2e5c00bf` ~0.25 (instant). Six archetypes × (law + front) = 12 stills (human chose the full set).
+
+**Blocked:** `capture.ps1` grabs the **foreground window**; a first run captured a non-editor foreground
+(discarded on sight, nothing committed — privacy). MCP `CaptureViewport` can't substitute (PIE skeletal actor
+renders as a gizmo proxy). The re-capture needs the **Unreal Editor viewport foregrounded** (ideally the PIE
+viewport maximised). Held for that, then the body ballot.
