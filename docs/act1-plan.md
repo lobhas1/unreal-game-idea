@@ -396,8 +396,25 @@ body frozen in the idle pose while the VFX evolved. The committed step-E stills 
 is a long-standing capture limitation, not a regression. **The body ballot is done LIVE in PIE**, where the
 animation plays normally.
 
-**Live ballot — SLAM (murk @0.35×): PASS.** Human confirmed the wizard leaps → slams and the spell activates at
-the correct time (footplant/resolve) — CastResolved alignment + the montage blend validated end-to-end live.
+**Live body ballot — ALL SIX ARCHETYPES PASS** (human, PIE @0.35× / instants @0.05×, FrontInspection):
+- **SLAM** (murk) — leap → slam, spell at the footplant/resolve.
+- **THROW** (cinder) — wind-up → release at the throw frame.
+- **WARD** (scrying-pool) — DefendStart raises the guard, Maintain holds it braced.
+- **HEAL** (lighthouse) — bestow/tending gesture, heal at the release. (Green number reads "+0" because the
+  corpus heals are almost all pure OVERHEAL — `effective:0, overheal:184` here; 107/108 showcase heals have
+  effective 0, casters spawn at full HP. Data-faithful; left as-is per human ruling.)
+- **CHANNEL** (glimmer, instant) — arms idle → cross (spell) → down, trimmed start blended.
+- **SNAP** (blaze, instant) — quick Attack04 flick, spell at the snap.
+
+CastResolved alignment + the montage blend (Approach A) validated end-to-end live across every archetype.
+
+**Concept-element palette fix (commit `19a6d4c`):** zones/decals/FX read the palette from `CurrentConceptElement`,
+which was looked up by spell NAME against a manifest keyed by hashed id — so it always missed and every showcase
+fell back to arcane-neutral (purple); a light heal rendered purple. Fixed: resolve from the loaded showcase's
+UNIQUE id (from `ReplayPath`), name-map demoted to fallback (fights → empty → arcane, unchanged). Id-primary is
+deliberate — the corpus has same-name TWINS with different elements (Mist water/air, Snare nature/shadow) that a
+displayName key would collapse last-write-wins. Verified: mist-7c632a8c→water, mist-d7584484→air, lighthouse→light,
+murk→shadow. Body-only (Live Coding).
 
 **Telegraph decal RETAINED (human ruling):** the faint cast-start zone decal (`SpawnZoneDecal` 0.12 opacity at
 the future zone centre) reads as a purple tint before the slam lands. Kept intentionally as an **AoE
